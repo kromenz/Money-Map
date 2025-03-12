@@ -1,0 +1,54 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  expenses  Expense[]
+  incomes   Income[]
+  createdAt DateTime @default(now())
+}
+
+model Expense {
+  id          String      @id @default(uuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id])
+  amount      Decimal
+  categoryId  String
+  category    Category    @relation(fields: [categoryId], references: [id])
+  description String?
+  date        DateTime    @default(now())
+  recurrence  Recurrence @default(none)
+}
+
+enum Recurrence {
+  none
+  daily
+  weekly
+  monthly
+  yearly
+}
+
+
+model Category {
+  id       String   @id @default(uuid())
+  name     String   @unique
+  expenses Expense[]
+}
+
+model Income {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  amount      Decimal
+  description String?
+  date        DateTime @default(now())
+}

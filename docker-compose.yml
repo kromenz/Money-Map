@@ -1,0 +1,36 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres
+    container_name: postgres_moneymap
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: moneymap
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  api:
+    build: ./backend
+    container_name: moneymap_api
+    depends_on:
+      - db
+    ports:
+      - "5000:5000"
+    environment:
+      DATABASE_URL: "postgresql://user:password@db:5432/moneymap"
+
+  frontend:
+    build: ./frontend
+    container_name: moneymap_frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
