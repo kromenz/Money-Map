@@ -1,7 +1,16 @@
 FROM node:22
+
 WORKDIR /app
+
 COPY package.json ./
+COPY run.sh ./
+
+RUN chmod +x run.sh
+
 RUN npm install
+
 COPY . .
-CMD ["node", "server.js"]
+
+CMD ["./run.sh"]
+
 EXPOSE 5000

@@ -1,36 +1,43 @@
-version: "3.8"
-
 services:
   db:
-    image: postgres
-    container_name: postgres_moneymap
-    restart: always
-    environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: moneymap
+    container_name: db
+    image: "postgres"
     ports:
-      - "5432:5432"
+      - "5430:5432"
+    env_file:
+      - ./db.env
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U moneymap_user -d moneymap"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
 
   api:
     build: ./backend
     container_name: moneymap_api
+    restart: always
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     ports:
       - "5000:5000"
+    env_file:
+      - ./db.env
     environment:
-      DATABASE_URL: "postgresql://user:password@db:5432/moneymap"
+      - USE_DEV_MODE=true
+    volumes:
+      - ./backend:/app
 
   frontend:
     build: ./frontend
     container_name: moneymap_frontend
-    ports:
-      - "3000:3000"
+    restart: always
     depends_on:
       - api
+    ports:
+      - "3000:3000"
 
 volumes:
-  pgdata:
+  postgres-data:
