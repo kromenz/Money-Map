@@ -67,7 +67,21 @@ export default function Home() {
 
               <a
                 href="#"
-                className="border-2 border-[#7a16ee] text-[#7a16ee] rounded-full px-6 py-2 font-semibold hover:bg-white/10 hover:text-black transition">
+                className="
+                inline-block
+                border-2 border-[#7a16ee]
+                rounded-full
+                px-6 py-2
+                font-semibold
+                text-[#7a16ee]
+                transform transition
+                duration-300
+                hover:scale-105
+                hover:shadow-lg
+                hover:bg-white/10
+                hover:text-gray-100
+                hover:border-white
+              ">
                 Sign In
               </a>
             </div>
@@ -83,7 +97,20 @@ export default function Home() {
             </p>
             <a
               href="#"
-              className="border-2 border-white rounded-full px-6 py-2 font-semibold hover:bg-white/10 hover:text-black transition">
+              className="
+                inline-block
+                border-2 border-white
+                rounded-full
+                px-6 py-2
+                font-semibold
+                text-white
+                transform transition
+                duration-300
+                hover:scale-105
+                hover:shadow-lg
+                hover:bg-white/10
+                hover:text-gray-100
+              ">
               Sign Up
             </a>
           </div>
