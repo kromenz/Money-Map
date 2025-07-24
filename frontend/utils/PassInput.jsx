@@ -12,12 +12,12 @@ export default function PasswordInput({ placeholder, name }) {
         type={visible ? "text" : "password"}
         placeholder={placeholder}
         name={name}
-        className="flex-1 bg-gray-100 text-gray-800 text-sm outline-none pr-8"
+        className="flex-1 bg-gray-100 text-gray-800 text-sm outline-none pr-4"
       />
       <button
         type="button"
         onClick={() => setVisible((v) => !v)}
-        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500">
+        className="relative right-2 top-1/2 transform -translate-y-1/2 text-gray-500">
         {visible ? <FaEyeSlash /> : <FaEye />}
       </button>
     </div>
