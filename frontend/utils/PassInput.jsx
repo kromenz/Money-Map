@@ -2,7 +2,13 @@ import { useState } from "react";
 import { MdLockOutline } from "react-icons/md";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 
-export default function PasswordInput({ placeholder, name }) {
+export default function PasswordInput({
+  placeholder,
+  name,
+  value,
+  onChange,
+  ...restProps
+}) {
   const [visible, setVisible] = useState(false);
 
   return (
@@ -12,7 +18,10 @@ export default function PasswordInput({ placeholder, name }) {
         type={visible ? "text" : "password"}
         placeholder={placeholder}
         name={name}
+        value={value}
+        onChange={onChange}
         className="flex-1 bg-gray-100 text-gray-800 text-sm outline-none pr-4"
+        {...restProps}
       />
       <button
         type="button"

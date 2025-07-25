@@ -3,12 +3,10 @@ import Footer from "../components/Footer";
 import DarkVeil from "../styles/DarkVeil/DarkVeil";
 import { FaGoogle, FaRegEnvelope } from "react-icons/fa";
 import PasswordInput from "../utils/PassInput";
+import SignUpSection from "../components/SignUp";
 
 export default function Home() {
   const [isSignup, setIsSignup] = useState(false);
-
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
 
   return (
     <div className="relative w-full h-screen overflow-hidden">
@@ -67,72 +65,44 @@ export default function Home() {
               href="#"
               className="
                 inline-block
-                border-2 border-[#7a16ee]
+                border-2 border-white
                 rounded-full
                 px-6 py-2
                 font-semibold
-                text-[#7a16ee]
+                text-white
                 transform transition
                 duration-300
                 hover:scale-105
                 hover:shadow-lg
-                hover:bg-white/10
-                hover:text-gray-100
-                hover:border-white
+                hover:text-[#7a16ee]
+                hover:border-[#7a16ee]
               ">
               Sign In
             </a>
           </div>
 
-          <div
-            className="absolute inset-y-0 right-0 w-1/2 space-y-4 flex flex-col items-center justify-center p-8 text-white transition-opacity duration-500"
-            style={{
-              opacity: isSignup ? 1 : 0,
-              pointerEvents: isSignup ? "auto" : "none",
-            }}>
-            <h2 className="text-3xl font-bold text-gray-300 mb-4">Sign Up</h2>
-
-            <div className="bg-gray-100 w-64 p-2 rounded-lg flex items-center">
-              <FaRegEnvelope className="text-gray-500 m-2" />
-              <input
-                type="email"
-                placeholder="Email"
-                name="email"
-                className="flex-1 bg-gray-100 text-gray-800 text-sm outline-none"
-              />
-            </div>
-
-            <PasswordInput placeholder="Password" name="passwordSignUp" />
-            <PasswordInput
-              placeholder="Repeat Password"
-              name="confirmPassword"
-            />
-
-            <button
-              onClick={() => {}}
-              className="
-                w-64 py-2 mt-2 rounded-full font-semibold
-                border-2 border-white text-white
-                transition-transform duration-300 hover:scale-105
-                hover:shadow-lg hover:bg-white/10 hover:text-gray-100
-              ">
-              Create Account
-            </button>
-          </div>
+          <SignUpSection isSignup={isSignup} />
 
           <div
             className={`
-              absolute inset-y-0 right-0 w-1/2 bg-[#7a16ee]
+              absolute inset-y-0 right-0 w-1/2 bg-[#5B2A86]
               flex flex-col items-center justify-center space-y-6 p-8
               transition-transform duration-500 ease-in-out
               ${isSignup ? "-translate-x-full" : "translate-x-0"}
             `}>
             <img src="/logo_wtit.png" alt="Logo" className="h-20" />
-            <p className="text-center text-white px-4">
+            <p
+              className="
+                text-center
+                text-white
+                px-4
+                whitespace-pre-line
+              ">
               {isSignup
-                ? "Already have an account? Go back to Sign In."
+                ? "Already have an account?\nGo back to Sign In."
                 : "Organize your finances quickly and effortlessly."}
             </p>
+
             <button
               onClick={() => setIsSignup((prev) => !prev)}
               className="
