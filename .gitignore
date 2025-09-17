@@ -87,3 +87,5 @@ pgdata/
 postgres-data/
 
 secrets/
+
+cache/
