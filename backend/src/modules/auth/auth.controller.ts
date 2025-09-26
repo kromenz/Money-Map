@@ -1,4 +1,3 @@
-// src/modules/auth/auth.controller.ts
 import { RequestHandler } from "express";
 import * as service from "./auth.service";
 import config from "../../config";

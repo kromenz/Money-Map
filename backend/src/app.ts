@@ -3,6 +3,9 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import morgan from "morgan";
 import authRoutes from "./modules/auth/auth.routes";
+import usersRouter from "./modules/user/user.routes";
+import tokenRouter from "./modules/token/token.routes";
+import { routeNotFound } from "./middlewares/routeNotFound";
 
 const app = express();
 
@@ -22,6 +25,11 @@ app.get("/", (req, res) => {
 });
 
 app.use("/auth", authRoutes);
+app.use("/user", usersRouter);
+app.use("/token", tokenRouter);
+
+//Error handler(s)
+app.use(routeNotFound);
 
 app.use((err: any, req: any, res: any, next: any) => {
   console.error(err);

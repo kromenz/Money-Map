@@ -1,4 +1,3 @@
-// src/modules/auth/auth.service.ts
 import { prisma } from "../../db/prisma";
 import bcrypt from "bcrypt";
 import {
@@ -60,7 +59,6 @@ export async function refreshTokens(refreshToken: string) {
   });
   if (!stored) throw new Error("Invalid refresh token");
 
-  // rotate
   await prisma.refreshToken.delete({ where: { id: stored.id } });
 
   const newAccess = signAccessToken({ sub: payload.sub });

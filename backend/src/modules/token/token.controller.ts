@@ -1,11 +1,11 @@
 import { RequestHandler } from "express";
-import * as service from "./user.service";
+import * as service from "./token.service";
 import { prisma } from "../../db/prisma";
 
 const uuidRegex =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-export const getUser: RequestHandler = async (req, res, next) => {
+export const getTokenByUserId: RequestHandler = async (req, res, next) => {
   try {
     const authUserId = (req as any).userId as string | undefined;
 
@@ -29,20 +29,9 @@ export const getUser: RequestHandler = async (req, res, next) => {
       return;
     }
 
-    const user = await service.getUser(userId);
+    const user = await service.getTokensByUserId(userId);
     res.json(user);
     return;
-  } catch (err) {
-    return next(err);
-  }
-};
-
-export const getAllUsers: RequestHandler = async (req, res, next) => {
-  try {
-    const users = await prisma.user.findMany({
-      select: { id: true, email: true, name: true, createdAt: true },
-    });
-    res.json(users);
   } catch (err) {
     return next(err);
   }
