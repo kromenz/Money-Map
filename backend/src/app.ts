@@ -7,7 +7,7 @@ import usersRouter from "./modules/user/user.routes";
 import tokenRouter from "./modules/token/token.routes";
 import { routeNotFound } from "./middlewares/routeNotFound";
 
-const app = express();
+export const app = express();
 
 app.use(morgan("dev"));
 
