@@ -13,7 +13,7 @@ MoneyMap is an expense management application developed with **React** and **Pri
 
 ## 🛠 Technologies Used
 
-- **Frontend**: React, Tailwind CSS
+- **Frontend**: React, NextJS, Tailwind CSS
 - **Backend**: Node.js, Express
 - **Database**: PostgreSQL (Docker)
 - **ORM**: Prisma
