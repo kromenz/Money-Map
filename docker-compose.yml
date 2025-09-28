@@ -34,7 +34,7 @@ services:
     volumes:
       - ./backend:/app:delegated
       - /app/node_modules
-    command: ["sh", "/app/run.sh"]
+    command: ["bash", "/app/run.sh"]
 
   frontend:
     build: ./frontend

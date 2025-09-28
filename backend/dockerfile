@@ -11,4 +11,4 @@ COPY . .
 
 EXPOSE 5000
 
-CMD ["./run.sh"]
+CMD ["/app/run.sh"]
