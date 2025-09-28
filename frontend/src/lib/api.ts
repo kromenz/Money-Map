@@ -1,11 +1,13 @@
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+import axios from "axios";
 
-export async function login(email: string, password: string) {
-  const res = await fetch(`${API}/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include".
-    body: JSON.stringify({ email, password }),
-  });
-  return res.json();
-}
+const baseURL = process.env.NEXT_PUBLIC_API_BASE || "/api";
+
+const api = axios.create({
+  baseURL,
+  withCredentials: true,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+export default api;
