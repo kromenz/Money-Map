@@ -36,14 +36,5 @@ services:
       - /app/node_modules
     command: ["bash", "/app/run.sh"]
 
-  frontend:
-    build: ./frontend
-    container_name: moneymap_frontend
-    restart: always
-    depends_on:
-      - api
-    ports:
-      - "3000:3000"
-
 volumes:
   postgres-data:
