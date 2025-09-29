@@ -32,7 +32,6 @@ export default function useAuth() {
     }
   }, []);
 
-  // optional: try refresh on mount (silent)
   useEffect(() => {
     (async () => {
       try {
