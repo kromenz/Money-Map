@@ -1,12 +1,72 @@
+"use client";
 import { useState } from "react";
-import Footer from "../components/Footer";
+import Footer from "../src/components/Footer";
 import DarkVeil from "../styles/DarkVeil/DarkVeil";
 import { FaGoogle, FaRegEnvelope } from "react-icons/fa";
 import PasswordInput from "../utils/PassInput";
-import SignUpSection from "../components/SignUp";
+import SignUpSection from "../src/components/SignUp";
+import { toast } from "sonner";
+import { useRouter } from "next/router";
+import { useAuthContext } from "../src/context/AuthContext";
+import * as authService from "../src/services/auth.service";
 
 export default function Home() {
+  const router = useRouter();
   const [isSignup, setIsSignup] = useState(false);
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loadingSignIn, setLoadingSignIn] = useState(false);
+
+  const [loadingSignUp, setLoadingSignUp] = useState(false);
+
+  const { login, user, loading } = useAuthContext();
+
+  async function handleSignIn(e?: React.FormEvent) {
+    e?.preventDefault();
+    if (!email || !password)
+      return toast.error("Fill in the email and password");
+
+    try {
+      const res = await login({ email, password });
+      toast.success("Welcome!");
+
+      router.push("/dashboard");
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.response?.data?.error || err?.message || "Login falhou");
+    }
+  }
+
+  async function handleSignUp(payload: {
+    name?: string;
+    email: string;
+    password: string;
+  }) {
+    setLoadingSignUp(true);
+    try {
+      const res = await authService.register(payload);
+      // se o backend retornar user ou ok, podes reagir aqui
+      toast.success("Conta criada com sucesso");
+
+      // opcional: se quiseres fazer login automático depois do register,
+      // podes chamar authService.login(...) aqui e redirecionar
+      // const loginRes = await authService.login({ email: payload.email, password: payload.password });
+
+      setIsSignup(false);
+
+      // opcional: redireciona para dashboard
+      // router.push("/dashboard");
+    } catch (err: any) {
+      console.error("SignUp error:", err);
+      const msg =
+        err?.response?.data?.error || err?.message || "Registo falhou";
+      toast.error(msg);
+      throw err; // opcional: rethrow se queres que o caller também reaja
+    } finally {
+      setLoadingSignUp(false);
+    }
+  }
 
   return (
     <div className="relative w-full h-screen overflow-hidden">
@@ -38,66 +98,65 @@ export default function Home() {
               or use your email account
             </p>
 
-            <div className="flex flex-col items-center w-full">
+            <form
+              className="flex flex-col items-center w-full"
+              onSubmit={handleSignIn}>
               <div className="bg-gray-100 w-64 p-2 my-2 rounded-lg flex items-center">
                 <FaRegEnvelope className="text-gray-500 m-2" />
                 <input
                   type="email"
                   placeholder="Email"
                   name="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className="text-gray-800 bg-gray-100 text-sm flex-1 outline-none"
                 />
               </div>
-              <PasswordInput placeholder="Password" name="passwordSignIn" />
-            </div>
 
-            <div className="flex w-64 items-center text-xs">
-              <label className="flex items-center">
-                <input type="checkbox" name="remember" className="mr-1" />
-                Remember me
-              </label>
-              <a href="#" className="ml-auto hover:underline">
-                Forgot Password?
-              </a>
-            </div>
+              <PasswordInput
+                placeholder="Password"
+                name="passwordSignIn"
+                value={password}
+                onChange={(e) =>
+                  setPassword((e.target as HTMLInputElement).value)
+                }
+              />
 
-            <a
-              href="#"
-              className="
-                inline-block
-                border-2 border-white
-                rounded-full
-                px-6 py-2
-                font-semibold
-                text-white
-                transform transition
-                duration-300
-                hover:scale-105
-                hover:shadow-lg
-                hover:text-[#7a16ee]
-                hover:border-[#7a16ee]
-              ">
-              Sign In
-            </a>
+              <div className="flex w-64 items-center text-xs mt-2">
+                <label className="flex items-center">
+                  <input type="checkbox" name="remember" className="mr-1" />
+                  Remember me
+                </label>
+                <a href="#" className="ml-auto hover:underline">
+                  Forgot Password?
+                </a>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loadingSignIn}
+                className={`inline-block border-2 border-white rounded-full px-6 py-2 font-semibold text-white transform transition duration-300 hover:scale-105 hover:shadow-lg ${
+                  loadingSignIn
+                    ? "opacity-60 cursor-not-allowed"
+                    : "hover:text-[#7a16ee] hover:border-[#7a16ee]"
+                } mt-4`}>
+                {loadingSignIn ? "Signing in..." : "Sign In"}
+              </button>
+            </form>
           </div>
 
-          <SignUpSection isSignup={isSignup} />
+          <SignUpSection
+            isSignup={isSignup}
+            onSignUp={handleSignUp}
+            loading={loadingSignUp}
+          />
 
           <div
-            className={`
-              absolute inset-y-0 right-0 w-1/2 bg-[#5B2A86]
-              flex flex-col items-center justify-center space-y-6 p-8
-              transition-transform duration-500 ease-in-out
-              ${isSignup ? "-translate-x-full" : "translate-x-0"}
-            `}>
+            className={`absolute inset-y-0 right-0 w-1/2 bg-[#5B2A86] flex flex-col items-center justify-center space-y-6 p-8 transition-transform duration-500 ease-in-out ${
+              isSignup ? "-translate-x-full" : "translate-x-0"
+            }`}>
             <img src="/logo_wtit.png" alt="Logo" className="h-20" />
-            <p
-              className="
-                text-center
-                text-white
-                px-4
-                whitespace-pre-line
-              ">
+            <p className="text-center text-white px-4 whitespace-pre-line">
               {isSignup
                 ? "Already have an account?\nGo back to Sign In."
                 : "Organize your finances quickly and effortlessly."}
@@ -105,12 +164,7 @@ export default function Home() {
 
             <button
               onClick={() => setIsSignup((prev) => !prev)}
-              className="
-                px-8 py-2 rounded-full border-2
-                border-white text-white font-semibold
-                transition-transform duration-300 hover:scale-105
-                hover:bg-white/10
-              ">
+              className="px-8 py-2 rounded-full border-2 border-white text-white font-semibold transition-transform duration-300 hover:scale-105 hover:bg-white/10">
               {isSignup ? "Sign In" : "Sign Up"}
             </button>
           </div>

@@ -14,3 +14,15 @@ export interface LoginResponse {
   user?: User;
   error?: string;
 }
+
+export interface SignUpPayload {
+  name?: string;
+  email: string;
+  password: string;
+}
+
+export interface Props {
+  isSignup: boolean;
+  onSignUp?: (payload: SignUpPayload) => Promise<void> | void;
+  loading?: boolean;
+}
