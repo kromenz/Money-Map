@@ -1,7 +1,10 @@
-const path = require("path");
-
 module.exports = {
-  turbopack: {
-    root: path.resolve(__dirname),
+  async rewrites() {
+    return [
+      {
+        source: "/api/:path*",
+        destination: "http://localhost:5000/:path*",
+      },
+    ];
   },
 };
