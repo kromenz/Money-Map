@@ -1,24 +1,33 @@
 import { prisma } from "../../db/prisma";
 
+const uuidRegex =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export async function getAllUsers() {
   return await prisma.user.findMany();
 }
 
-export async function getUser(userId?: string) {
-  if (!userId) {
-    console.error("getUser called with empty userId:", userId);
-    throw new Error("Missing userId from request.");
+export async function getUser(identifier?: string) {
+  if (!identifier) {
+    console.error("getUser called with empty param:", identifier);
+    throw new Error("Missing param from request.");
   }
 
-  const id = String(userId);
+  let user;
 
-  const existing = await prisma.user.findUnique({ where: { id } });
+  if (uuidRegex.test(identifier)) {
+    user = await prisma.user.findUnique({ where: { id: identifier } });
+  } else if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)) {
+    user = await prisma.user.findUnique({ where: { email: identifier } });
+  } else {
+    throw new Error("Invalid identifier format");
+  }
 
-  if (!existing) {
+  if (!user) {
     throw new Error("User not found");
   }
 
-  return { id: existing.id, email: existing.email, name: existing.name };
+  return { id: user.id, email: user.email, name: user.name };
 }
 
 export async function getUserByEmail(email: string) {
