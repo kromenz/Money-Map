@@ -1,6 +1,22 @@
 import { RequestHandler } from "express";
 import * as service from "./auth.service";
 import config from "../../config";
+import {
+  signAccessToken,
+  signRefreshToken,
+  verifyRefreshToken,
+  hashToken,
+} from "../../utils/tokens";
+
+const cookieBase = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite:
+    process.env.NODE_ENV === "production"
+      ? ("none" as const)
+      : ("lax" as const),
+  path: "/",
+};
 
 export const register: RequestHandler = async (req, res, next) => {
   try {
@@ -51,8 +67,11 @@ export const refresh: RequestHandler = async (req, res, next) => {
       return;
     }
 
-    const { accessToken, refreshToken: newRefresh } =
-      await service.refreshTokens(refreshToken);
+    const {
+      accessToken,
+      refreshToken: newRefresh,
+      user,
+    } = await service.refreshTokens(refreshToken);
 
     res.cookie("access_token", accessToken, {
       httpOnly: true,
@@ -69,7 +88,7 @@ export const refresh: RequestHandler = async (req, res, next) => {
       maxAge: config.refreshExpiryDays * 24 * 60 * 60 * 1000,
     });
 
-    res.json({ ok: true });
+    res.json({ user });
     return;
   } catch (err) {
     return next(err);
