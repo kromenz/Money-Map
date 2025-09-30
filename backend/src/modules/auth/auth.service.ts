@@ -44,44 +44,70 @@ export async function loginUser(email: string, password: string) {
   });
 
   return {
-    user: { id: user.id, email: user.email },
+    user: { id: user.id, email: user.email, name: user.name ?? null },
     accessToken,
     refreshToken,
   };
 }
 
 export async function refreshTokens(refreshToken: string) {
-  // verify token
+  if (!refreshToken) throw new Error("No refresh token provided");
+
   const payload: any = verifyRefreshToken(refreshToken) as any;
+  const userId = String(payload?.sub);
+  if (!userId) throw new Error("Invalid token payload");
+
   const tokenHash = hashToken(refreshToken);
+
   const stored = await prisma.refreshToken.findFirst({
-    where: { tokenHash, userId: String(payload.sub) },
-  });
-  if (!stored) throw new Error("Invalid refresh token");
-
-  await prisma.refreshToken.delete({ where: { id: stored.id } });
-
-  const newAccess = signAccessToken({ sub: payload.sub });
-  const newRefresh = signRefreshToken({ sub: payload.sub });
-
-  await prisma.refreshToken.create({
-    data: {
-      tokenHash: hashToken(newRefresh),
-      userId: String(payload.sub),
-      expiresAt: new Date(
-        Date.now() + config.refreshExpiryDays * 24 * 60 * 60 * 1000
-      ),
+    where: {
+      tokenHash,
+      userId,
+      expiresAt: { gt: new Date() },
     },
+    orderBy: { createdAt: "desc" },
   });
 
-  return { accessToken: newAccess, refreshToken: newRefresh };
+  if (!stored) throw new Error("Invalid or expired refresh token");
+
+  const newRefresh = signRefreshToken({ sub: userId });
+  const newHash = hashToken(newRefresh);
+  const newExpiry = new Date(
+    Date.now() + config.refreshExpiryDays * 24 * 60 * 60 * 1000
+  );
+
+  await prisma.$transaction([
+    prisma.refreshToken.create({
+      data: {
+        tokenHash: newHash,
+        userId,
+        expiresAt: newExpiry,
+      },
+    }),
+    prisma.refreshToken.delete({ where: { id: stored.id } }),
+  ]);
+
+  const newAccess = signAccessToken({ sub: userId });
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, name: true },
+  });
+
+  if (!user) throw new Error("User not found");
+
+  return { accessToken: newAccess, refreshToken: newRefresh, user };
 }
 
-export async function logout(refreshToken?: string) {
+export async function logout(refreshToken?: string, userId?: string) {
   if (refreshToken) {
     const tokenHash = hashToken(refreshToken);
     await prisma.refreshToken
       .deleteMany({ where: { tokenHash } })
       .catch(() => {});
+    return;
+  }
+  if (userId) {
+    await prisma.refreshToken.deleteMany({ where: { userId } }).catch(() => {});
   }
 }
