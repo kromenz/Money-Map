@@ -2,7 +2,7 @@
 import { useState } from "react";
 import Footer from "../src/components/Footer";
 import DarkVeil from "../styles/DarkVeil/DarkVeil";
-import { FaGoogle, FaRegEnvelope } from "react-icons/fa";
+import { FaGoogle, FaGithub, FaRegEnvelope } from "react-icons/fa";
 import PasswordInput from "../utils/PassInput";
 import SignUpSection from "../src/components/SignUp";
 import { toast } from "sonner";
@@ -10,6 +10,10 @@ import { useRouter } from "next/router";
 import { useEffect } from "react";
 import { useAuthContext } from "../src/context/AuthContext";
 import * as authService from "../src/services/auth.service";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
+const POPUP_W = 600;
+const POPUP_H = 700;
 
 export default function Home() {
   const router = useRouter();
@@ -22,6 +26,8 @@ export default function Home() {
   const [loadingSignUp, setLoadingSignUp] = useState(false);
 
   const { login, user, loading } = useAuthContext();
+
+  const githubUrl = `${API_BASE}/auth/github`;
 
   useEffect(() => {
     if (!loading && user) {
@@ -77,6 +83,23 @@ export default function Home() {
     }
   }
 
+  function openPopup() {
+    const left = window.screenX + (window.outerWidth - POPUP_W) / 2;
+    const top = window.screenY + (window.outerHeight - POPUP_H) / 2;
+    const popup = window.open(
+      githubUrl,
+      "github_oauth",
+      `width=${POPUP_W},height=${POPUP_H},left=${left},top=${top}`
+    );
+
+    const timer = setInterval(() => {
+      if (!popup || popup.closed) {
+        clearInterval(timer);
+        window.location.reload();
+      }
+    }, 500);
+  }
+
   return (
     <div className="relative w-full h-screen overflow-hidden">
       <div className="absolute inset-0 z-0">
@@ -99,9 +122,18 @@ export default function Home() {
             <h2 className="text-3xl font-bold text-gray-300">Sign In</h2>
             <div className="border-2 w-10 border-gray-300 mb-2" />
             <div className="flex justify-center space-x-2">
-              <a href="#" className="border-2 border-gray-200 rounded-full p-3">
-                <FaGoogle className="text-sm" />
-              </a>
+              <button
+                // onClick={}
+                className="border-2 border-gray-200 rounded-full p-3"
+                aria-label="Sign in with Google">
+                <FaGoogle className="text-xl" />
+              </button>
+              <button
+                onClick={openPopup}
+                className="border-2 border-gray-200 rounded-full p-3"
+                aria-label="Sign in with GitHub">
+                <FaGithub className="text-xl" />
+              </button>
             </div>
             <p className="text-gray-300 text-center">
               or use your email account
