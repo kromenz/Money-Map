@@ -63,14 +63,6 @@ export default function SignUpSection({ isSignup, onSignUp, loading }: Props) {
       <h2 className="text-3xl font-bold text-gray-300 mb-4">Sign Up</h2>
 
       <form className="flex flex-col items-center" onSubmit={handleSubmit}>
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Name (optional)"
-          className="mb-3 p-2 rounded w-64 text-gray-800"
-          aria-label="Name"
-        />
-
         <div className="bg-gray-100 w-64 p-2 rounded-lg flex items-center mb-3">
           <FaRegEnvelope className="text-gray-500 m-2" />
           <input

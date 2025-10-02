@@ -7,6 +7,7 @@ import {
   verifyRefreshToken,
 } from "../../utils/tokens";
 import config from "../../config";
+import axios from "axios";
 
 export async function registerUser(
   email: string,
@@ -110,4 +111,41 @@ export async function logout(refreshToken?: string, userId?: string) {
   if (userId) {
     await prisma.refreshToken.deleteMany({ where: { userId } }).catch(() => {});
   }
+}
+
+export async function githubCallback(code: string) {
+  const tokenResponse = await axios.post(
+    "https://github.com/login/oauth/access_token",
+    {
+      client_id: process.env.GITHUB_CLIENT_ID,
+      client_secret: process.env.GITHUB_CLIENT_SECRET,
+      code,
+    },
+    {
+      headers: { Accept: "application/json" },
+    }
+  );
+
+  const token = tokenResponse.data?.access_token;
+  if (!token) throw new Error("No access token from GitHub");
+
+  const userResponse = await axios.get("https://api.github.com/user", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const emailResponse = await axios.get("https://api.github.com/user/emails", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const primaryEmailObj =
+    (emailResponse.data || []).find((e: any) => e.primary) ||
+    emailResponse.data[0];
+  const email = primaryEmailObj?.email;
+
+  return {
+    token,
+    user: userResponse.data,
+    email,
+    emails: emailResponse.data,
+  };
 }

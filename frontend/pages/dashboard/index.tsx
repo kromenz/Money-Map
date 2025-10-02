@@ -1,6 +1,8 @@
-// pages/dashboard.tsx
+"use client";
+
 import type { NextPageWithAnimation } from "../../src/types/next";
 import type { Variants } from "framer-motion";
+import useRequireAuth from "../../src/hooks/useRequireAuth";
 
 const slideLeftVariants: Variants = {
   initial: { opacity: 0, x: 40, scale: 0.995 },
@@ -9,6 +11,11 @@ const slideLeftVariants: Variants = {
 };
 
 const Dashboard: NextPageWithAnimation = () => {
+  const { user, loading } = useRequireAuth("/");
+  if (loading || !user) {
+    return null;
+  }
+
   return (
     <div className="p-8">
       <h1 className="text-3xl font-bold">Dashboard</h1>
