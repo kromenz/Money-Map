@@ -1,22 +1,6 @@
 import { RequestHandler } from "express";
 import * as service from "./auth.service";
 import config from "../../config";
-import {
-  signAccessToken,
-  signRefreshToken,
-  verifyRefreshToken,
-  hashToken,
-} from "../../utils/tokens";
-
-const cookieBase = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite:
-    process.env.NODE_ENV === "production"
-      ? ("none" as const)
-      : ("lax" as const),
-  path: "/",
-};
 
 export const register: RequestHandler = async (req, res, next) => {
   try {
@@ -103,6 +87,37 @@ export const logout: RequestHandler = async (req, res, next) => {
     res.clearCookie("refresh_token", { path: "/" });
     res.json({ ok: true });
     return;
+  } catch (err) {
+    return next(err);
+  }
+};
+
+export const github: RequestHandler = async (req, res, next) => {
+  const redirectUrl = "http://localhost:5000/auth/github/callback";
+  const clientId = process.env.GITHUB_CLIENT_ID;
+
+  const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUrl}&scope=user:email`;
+  res.redirect(url);
+};
+
+export const githubCallback: RequestHandler = async (req, res, next) => {
+  try {
+    const code = req.query.code as string;
+    const debug = req.query.debug === "1"; // se quiseres testar sem redirect
+    const result = await service.githubCallback(code);
+
+    console.log("GITHUB CALLBACK RESULT:", result);
+
+    if (debug) {
+      res.json(result);
+      return;
+    }
+
+    return res.redirect(
+      `http://localhost:3000/auth/github?accessToken=${encodeURIComponent(
+        result.token
+      )}`
+    );
   } catch (err) {
     return next(err);
   }
