@@ -7,6 +7,7 @@ import PasswordInput from "../utils/PassInput";
 import SignUpSection from "../src/components/SignUp";
 import { toast } from "sonner";
 import { useRouter } from "next/router";
+import { useEffect } from "react";
 import { useAuthContext } from "../src/context/AuthContext";
 import * as authService from "../src/services/auth.service";
 
@@ -22,6 +23,12 @@ export default function Home() {
 
   const { login, user, loading } = useAuthContext();
 
+  useEffect(() => {
+    if (!loading && user) {
+      router.replace("/dashboard");
+    }
+  }, [loading, user, router]);
+
   async function handleSignIn(e?: React.FormEvent) {
     e?.preventDefault();
     if (!email || !password)
@@ -29,12 +36,14 @@ export default function Home() {
 
     try {
       const res = await login({ email, password });
-      toast.success("Welcome!");
-
-      router.push("/dashboard");
+      if (res?.user) {
+        toast.success("Welcome!");
+        router.push("/dashboard");
+      } else {
+        router.push("/dashboard");
+      }
     } catch (err: any) {
-      console.error(err);
-      toast.error(err?.response?.data?.error || err?.message || "Login falhou");
+      toast.error(err?.response?.data?.error || err?.message || "Login failed");
     }
   }
 
@@ -123,10 +132,6 @@ export default function Home() {
               />
 
               <div className="flex w-64 items-center text-xs mt-2">
-                <label className="flex items-center">
-                  <input type="checkbox" name="remember" className="mr-1" />
-                  Remember me
-                </label>
                 <a href="#" className="ml-auto hover:underline">
                   Forgot Password?
                 </a>

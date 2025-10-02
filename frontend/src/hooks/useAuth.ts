@@ -9,15 +9,11 @@ export default function useAuth() {
   const [loading, setLoading] = useState(false);
 
   const login = useCallback(async (payload: LoginPayload) => {
-    setLoading(true);
     try {
       const data = await authService.login(payload);
       if (data.user) setUser(data.user);
-      setLoading(false);
       return data;
-    } catch (err) {
-      setLoading(false);
-      throw err;
+    } finally {
     }
   }, []);
 
