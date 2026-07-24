@@ -26,7 +26,13 @@ function makeRes() {
       return this;
     },
   };
-  return res as unknown as Response & { sendCount: number; statusCode: number };
+  // `body` tem de estar no tipo: o teste do token expirado le res.body, e o
+  // tsconfig inclui os ficheiros de teste, portanto omiti-lo parte o build.
+  return res as unknown as Response & {
+    sendCount: number;
+    statusCode: number;
+    body: unknown;
+  };
 }
 
 function makeReq(token?: string) {
