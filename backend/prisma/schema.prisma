@@ -11,11 +11,18 @@ model User {
   id        String   @id @default(uuid())
   name      String?
   email     String   @unique
-  password  String
+  password  String?
   expenses  Expense[]
   incomes   Income[]
+  authProvider AuthProvider @default(local)
   createdAt DateTime @default(now())
   refreshTokens RefreshToken[]
+}
+
+enum AuthProvider {
+  local
+  github
+  google
 }
 
 model RefreshToken {

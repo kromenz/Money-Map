@@ -28,6 +28,11 @@ export async function loginUser(email: string, password: string) {
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) throw new Error("User does not exist.");
 
+  if (!user.password)
+    throw new Error(
+      "Account created via OAuth — set a password or login with provider."
+    );
+
   const ok = await bcrypt.compare(password, user.password);
   if (!ok) throw new Error("Invalid credentials");
 
@@ -148,4 +153,50 @@ export async function githubCallback(code: string) {
     email,
     emails: emailResponse.data,
   };
+}
+
+export async function setPassword(
+  userId: string,
+  password: string,
+  currentPassword?: string
+) {
+  if (!userId) {
+    const e: any = new Error("Missing userId");
+    e.status = 401;
+    throw e;
+  }
+  if (!password || password.length < 8) {
+    const e: any = new Error("Password too short (min 8 chars)");
+    e.status = 400;
+    throw e;
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    const e: any = new Error("User not found");
+    e.status = 404;
+    throw e;
+  }
+
+  if (user.password) {
+    if (!currentPassword) {
+      const e: any = new Error("Current password required");
+      e.status = 403;
+      throw e;
+    }
+    const ok = await bcrypt.compare(currentPassword, user.password);
+    if (!ok) {
+      const e: any = new Error("Current password is incorrect");
+      e.status = 403;
+      throw e;
+    }
+  }
+
+  const hashed = await bcrypt.hash(password, 10);
+  await prisma.user.update({
+    where: { id: userId },
+    data: { password: hashed, authProvider: "local" },
+  });
+
+  return { ok: true };
 }
