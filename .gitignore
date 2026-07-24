@@ -91,3 +91,4 @@ secrets/
 cache/
 
 docs/superpowers
+.superpowers/
