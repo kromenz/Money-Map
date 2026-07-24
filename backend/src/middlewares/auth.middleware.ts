@@ -12,25 +12,28 @@ export const authMiddleware: RequestHandler = (req, res, next) => {
 
   if (!token) {
     res.status(401).json({ error: "No token" });
+    return;
   }
 
   try {
     const payload = verifyAccessToken(token) as any;
     if (!payload?.sub) {
       res.status(401).json({ error: "Invalid token payload" });
+      return;
     }
 
     (req as any).userId = String(payload.sub);
     next();
   } catch (err: any) {
-    if (err?.name === "TokenExpiredError") {
-      res.status(401).json({ error: "Token expired" });
-    }
-
     try {
       res.clearCookie("access_token", { path: "/" });
     } catch (_) {
       /* ignore */
+    }
+
+    if (err?.name === "TokenExpiredError") {
+      res.status(401).json({ error: "Token expired" });
+      return;
     }
 
     console.warn("authMiddleware: invalid token:", err?.message || err);
