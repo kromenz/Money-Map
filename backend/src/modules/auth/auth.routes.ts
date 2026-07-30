@@ -9,6 +9,8 @@ import {
   setPassword,
 } from "./auth.controller";
 import { authMiddleware } from "../../middlewares/auth.middleware";
+import { validateBody } from "../../middlewares/validate";
+import { setPasswordSchema } from "./auth.schemas";
 
 const authRouter = Router();
 
@@ -18,6 +20,11 @@ authRouter.post("/refresh", refresh);
 authRouter.post("/logout", authMiddleware, logout);
 authRouter.get("/github", github);
 authRouter.get("/github/callback", githubCallback);
-authRouter.get("/set-password", authMiddleware, setPassword);
+authRouter.post(
+  "/set-password",
+  authMiddleware,
+  validateBody(setPasswordSchema),
+  setPassword
+);
 
 export default authRouter;

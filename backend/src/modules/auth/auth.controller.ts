@@ -126,7 +126,10 @@ export const githubCallback: RequestHandler = async (req, res, next) => {
 export const setPassword: RequestHandler = async (req, res, next) => {
   try {
     const userId = (req as any).userId;
-    if (!userId) res.status(401).json({ error: "Not authenticated" });
+    if (!userId) {
+      res.status(401).json({ error: "Not authenticated" });
+      return;
+    }
 
     const { password, currentPassword } = req.body;
 
