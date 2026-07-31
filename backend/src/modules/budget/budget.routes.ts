@@ -1,7 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { authMiddleware } from "../../middlewares/auth.middleware";
-import { importWorkbook } from "./budget.controller";
+import { importWorkbook, getGrid } from "./budget.controller";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -16,5 +16,7 @@ budgetRouter.post(
   upload.single("file"),
   importWorkbook
 );
+
+budgetRouter.get("/grid", authMiddleware, getGrid);
 
 export default budgetRouter;
