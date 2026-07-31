@@ -5,6 +5,7 @@ import morgan from "morgan";
 import authRoutes from "./modules/auth/auth.routes";
 import usersRouter from "./modules/user/user.routes";
 import tokenRouter from "./modules/token/token.routes";
+import budgetRouter from "./modules/budget/budget.routes";
 import { routeNotFound } from "./middlewares/routeNotFound";
 
 export const app = express();
@@ -27,6 +28,7 @@ app.get("/", (req, res) => {
 app.use("/auth", authRoutes);
 app.use("/user", usersRouter);
 app.use("/token", tokenRouter);
+app.use("/budget", budgetRouter);
 
 //Error handler(s)
 app.use(routeNotFound);
