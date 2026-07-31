@@ -5,9 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchGrid } from "../services/budget.service";
 import type { GridRow } from "../types/budget";
 import { Skeleton } from "@/components/ui/skeleton";
-
-const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN",
-                "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+import { MONTH_LABELS, formatEur } from "@/lib/format";
 
 const SECTION_LABEL: Record<string, string> = {
   income: "Income",
@@ -15,17 +13,11 @@ const SECTION_LABEL: Record<string, string> = {
   expenses: "Expenses",
 };
 
-// Locale fixo (nao o do browser) para o servidor e o cliente formatarem igual.
-const eur = new Intl.NumberFormat("en-IE", {
-  style: "currency",
-  currency: "EUR",
-});
-
 function money(value: string) {
   const n = Number(value);
   if (n === 0) return <span className="text-muted-foreground">—</span>;
   return (
-    <span className={n < 0 ? "text-destructive" : undefined}>{eur.format(n)}</span>
+    <span className={n < 0 ? "text-destructive" : undefined}>{formatEur(n)}</span>
   );
 }
 
@@ -64,7 +56,7 @@ export function BudgetGrid({ year }: { year: number }) {
             <th className="sticky left-0 z-10 bg-muted/50 px-3 py-2 text-left font-medium">
               Category
             </th>
-            {MONTHS.map((m) => (
+            {MONTH_LABELS.map((m) => (
               <th key={m} className="px-3 py-2 text-right font-medium">
                 {m}
               </th>
