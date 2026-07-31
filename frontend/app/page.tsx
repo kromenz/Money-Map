@@ -6,7 +6,7 @@ import { FaGoogle, FaGithub, FaRegEnvelope } from "react-icons/fa";
 import PasswordInput from "../utils/PassInput";
 import SignUpSection from "../src/components/SignUp";
 import { toast } from "sonner";
-import { useRouter } from "next/router";
+import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuthContext } from "../src/context/AuthContext";
 import * as authService from "../src/services/auth.service";
@@ -15,7 +15,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
 const POPUP_W = 600;
 const POPUP_H = 700;
 
-export default function Home() {
+export default function HomePage() {
   const router = useRouter();
   const [isSignup, setIsSignup] = useState(false);
 

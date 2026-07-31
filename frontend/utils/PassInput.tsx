@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 import { MdLockOutline } from "react-icons/md";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
