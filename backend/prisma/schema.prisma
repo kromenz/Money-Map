@@ -8,15 +8,17 @@ generator client {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  name      String?
-  email     String   @unique
-  password  String?
-  expenses  Expense[]
-  incomes   Income[]
-  authProvider AuthProvider @default(local)
-  createdAt DateTime @default(now())
+  id            String        @id @default(uuid())
+  name          String?
+  email         String        @unique
+  password      String?
+  authProvider  AuthProvider  @default(local)
+  createdAt     DateTime      @default(now())
   refreshTokens RefreshToken[]
+  accounts      Account[]
+  categories    Category[]
+  transactions  Transaction[]
+  rules         Rule[]
 }
 
 enum AuthProvider {
@@ -26,45 +28,102 @@ enum AuthProvider {
 }
 
 model RefreshToken {
-  id         Int      @id @default(autoincrement())
-  tokenHash  String   @unique
-  user       User     @relation(fields: [userId], references: [id])
-  userId     String
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
+  id        Int      @id @default(autoincrement())
+  tokenHash String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 }
 
-model Expense {
-  id          String      @id @default(uuid())
-  userId      String
-  user        User        @relation(fields: [userId], references: [id])
-  amount      Decimal
-  categoryId  String
-  category    Category    @relation(fields: [categoryId], references: [id])
-  description String?
-  date        DateTime    @default(now())
-  recurrence  Recurrence @default(none)
+enum Section {
+  income
+  savings
+  expenses
 }
 
-enum Recurrence {
-  none
-  daily
-  weekly
-  monthly
-  yearly
+enum AccountType {
+  bank
+  broker
+  cash
+}
+
+enum Provider {
+  cgd
+  revolut
+  t212
+  manual
+}
+
+enum TxSource {
+  excel
+  csv
+  api
+  manual
+}
+
+model Account {
+  id                  String        @id @default(uuid())
+  userId              String
+  user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                String
+  type                AccountType
+  provider            Provider      @default(manual)
+  startingBalance     Decimal       @default(0) @db.Decimal(12, 2)
+  startingBalanceDate DateTime?
+  createdAt           DateTime      @default(now())
+  transactions        Transaction[]
+
+  @@unique([userId, name])
 }
 
 model Category {
-  id       String   @id @default(uuid())
-  name     String   @unique
-  expenses Expense[]
+  id           String        @id @default(uuid())
+  userId       String
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  section      Section
+  group        String        @default("") @map("category_group")
+  sortOrder    Int           @default(0)
+  archived     Boolean       @default(false)
+  transactions Transaction[]
+  rules        Rule[]
+
+  @@unique([userId, section, group, name])
+  @@index([userId, section, sortOrder])
 }
 
-model Income {
-  id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  amount      Decimal
-  description String?
-  date        DateTime @default(now())
+model Transaction {
+  id             String    @id @default(uuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date           DateTime
+  amount         Decimal   @db.Decimal(12, 2)
+  merchant       String?
+  rawDescription String?
+  accountId      String?
+  account        Account?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  categoryId     String?
+  category       Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  source         TxSource
+  externalId     String?
+  notes          String?
+  createdAt      DateTime  @default(now())
+
+  @@unique([userId, externalId])
+  @@index([userId, date])
+  @@index([userId, categoryId])
+}
+
+model Rule {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pattern    String
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  priority   Int      @default(100)
+  createdAt  DateTime @default(now())
+
+  @@index([userId, priority])
 }
