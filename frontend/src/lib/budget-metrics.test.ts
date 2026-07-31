@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GridResponse, GridRow, SectionTotal } from "../types/budget";
-import { yearMetrics } from "./budget-metrics";
+import { monthDetail, yearMetrics } from "./budget-metrics";
 
 /** 12 meses em que apenas alguns tem valor. */
 function months(values: Record<number, number>): string[] {
@@ -18,6 +18,23 @@ function total(section: string, m: Record<number, number>): SectionTotal {
 
 function grid(sectionTotals: SectionTotal[], rows: GridRow[] = []): GridResponse {
   return { year: 2026, rows, sectionTotals };
+}
+
+function row(
+  name: string,
+  group: string,
+  m: Record<number, number>,
+  section = "expenses"
+): GridRow {
+  const arr = months(m);
+  return {
+    categoryId: `${section}-${group}-${name}`,
+    section: section as GridRow["section"],
+    group,
+    name,
+    months: arr,
+    total: arr.reduce((s, v) => s + Number(v), 0).toFixed(2),
+  };
 }
 
 describe("yearMetrics", () => {
@@ -84,5 +101,121 @@ describe("yearMetrics", () => {
   it("lastActiveMonth e nulo num ano sem movimento", () => {
     expect(yearMetrics(grid([])).lastActiveMonth).toBeNull();
     expect(yearMetrics(grid([total("income", {})])).lastActiveMonth).toBeNull();
+  });
+});
+
+describe("monthDetail", () => {
+  it("agrega as despesas do mes por grupo, do maior para o menor", () => {
+    const d = monthDetail(
+      grid(
+        [total("expenses", { 0: 300 })],
+        [
+          row("Rent", "Home", { 0: 200 }),
+          row("Bus", "Transport", { 0: 100 }),
+        ]
+      ),
+      0
+    );
+
+    expect(d.byGroup).toEqual([
+      { group: "Home", amount: 200 },
+      { group: "Transport", amount: 100 },
+    ]);
+  });
+
+  it("junta categorias sem grupo sob Ungrouped", () => {
+    const d = monthDetail(
+      grid([total("expenses", { 0: 80 })], [
+        row("Misc", "", { 0: 50 }),
+        row("Other bits", "", { 0: 30 }),
+      ]),
+      0
+    );
+
+    expect(d.byGroup).toEqual([{ group: "Ungrouped", amount: 80 }]);
+  });
+
+  it("ignora as seccoes que nao sao despesas", () => {
+    const d = monthDetail(
+      grid([total("expenses", { 0: 50 })], [
+        row("Rent", "Home", { 0: 50 }),
+        row("Salary", "", { 0: 2000 }, "income"),
+      ]),
+      0
+    );
+
+    expect(d.byGroup).toEqual([{ group: "Home", amount: 50 }]);
+  });
+
+  it("nao cria linha Other com cinco ou menos categorias", () => {
+    const rows = [
+      row("A", "G", { 0: 50 }),
+      row("B", "G", { 0: 40 }),
+      row("C", "G", { 0: 30 }),
+      row("D", "G", { 0: 20 }),
+      row("E", "G", { 0: 10 }),
+    ];
+    const d = monthDetail(grid([total("expenses", { 0: 150 })], rows), 0);
+
+    expect(d.topCategories).toHaveLength(5);
+    expect(d.topCategories.map((c) => c.name)).not.toContain("Other");
+  });
+
+  it("cria linha Other com a soma das restantes acima de cinco", () => {
+    const rows = [
+      row("A", "G", { 0: 60 }),
+      row("B", "G", { 0: 50 }),
+      row("C", "G", { 0: 40 }),
+      row("D", "G", { 0: 30 }),
+      row("E", "G", { 0: 20 }),
+      row("F", "G", { 0: 7 }),
+      row("H", "G", { 0: 3 }),
+    ];
+    const d = monthDetail(grid([total("expenses", { 0: 210 })], rows), 0);
+
+    expect(d.topCategories).toHaveLength(6);
+    expect(d.topCategories[5]).toEqual({ name: "Other", group: "", amount: 10 });
+  });
+
+  it("descarta categorias a zero nesse mes", () => {
+    const d = monthDetail(
+      grid([total("expenses", { 0: 50 })], [
+        row("Rent", "Home", { 0: 50 }),
+        row("Holiday", "Fun", { 6: 900 }),
+      ]),
+      0
+    );
+
+    expect(d.topCategories).toEqual([
+      { name: "Rent", group: "Home", amount: 50 },
+    ]);
+  });
+
+  it("devolve listas vazias num mes sem movimento", () => {
+    const d = monthDetail(
+      grid([total("expenses", { 6: 100 })], [row("Rent", "Home", { 6: 100 })]),
+      0
+    );
+
+    expect(d.expenses).toBe(0);
+    expect(d.byGroup).toEqual([]);
+    expect(d.topCategories).toEqual([]);
+    expect(d.savingsRate).toBeNull();
+  });
+
+  it("calcula os totais do mes escolhido", () => {
+    const d = monthDetail(
+      grid([
+        total("income", { 3: 2000 }),
+        total("expenses", { 3: 1200 }),
+        total("savings", { 3: 400 }),
+      ]),
+      3
+    );
+
+    expect(d.month).toBe(3);
+    expect(d.income).toBe(2000);
+    expect(d.unallocated).toBe(400);
+    expect(d.savingsRate).toBeCloseTo(0.2);
   });
 });
