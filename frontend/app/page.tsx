@@ -62,7 +62,7 @@ export default function HomePage() {
     try {
       const res = await authService.register(payload);
       // se o backend retornar user ou ok, podes reagir aqui
-      toast.success("Conta criada com sucesso");
+      toast.success("Account created successfully");
 
       // opcional: se quiseres fazer login automático depois do register,
       // podes chamar authService.login(...) aqui e redirecionar
@@ -75,7 +75,7 @@ export default function HomePage() {
     } catch (err: any) {
       console.error("SignUp error:", err);
       const msg =
-        err?.response?.data?.error || err?.message || "Registo falhou";
+        err?.response?.data?.error || err?.message || "Sign up failed";
       toast.error(msg);
       throw err; // opcional: rethrow se queres que o caller também reaja
     } finally {
@@ -103,12 +103,7 @@ export default function HomePage() {
   return (
     <div className="relative w-full h-screen overflow-hidden">
       <div className="absolute inset-0 z-0">
-        <DarkVeil
-          hueShift={360}
-          warpAmount={5}
-          speed={1.5}
-          resolutionScale={1}
-        />
+        <DarkVeil hueShift={360} warpAmount={5} speed={1.5} />
       </div>
 
       <div className="relative z-10 flex items-center justify-center w-full h-full px-20">

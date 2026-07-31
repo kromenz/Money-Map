@@ -20,12 +20,12 @@ export function ImportWorkbook({ year }: { year: number }) {
 
       if (data.allMatch) {
         toast.success(
-          `Importadas ${data.transactionsWritten} celulas. Os totais batem com a folha.`
+          `Imported ${data.transactionsWritten} cells. Totals match the sheet.`
         );
       } else {
-        const falhados = data.checksums.filter((c) => !c.ok).length;
+        const mismatched = data.checksums.filter((c) => !c.ok).length;
         toast.error(
-          `Importado, mas ${falhados} total(is) nao batem com a folha. Ver abaixo.`
+          `Imported, but ${mismatched} total(s) do not match the sheet. See below.`
         );
       }
     },
@@ -45,10 +45,10 @@ export function ImportWorkbook({ year }: { year: number }) {
           disabled={mutation.isPending}
           onClick={() => {
             const file = inputRef.current?.files?.[0];
-            if (!file) return toast.error("Escolhe um ficheiro .xlsx");
+            if (!file) return toast.error("Choose an .xlsx file");
             mutation.mutate(file);
           }}>
-          {mutation.isPending ? "A importar..." : `Importar ${year}`}
+          {mutation.isPending ? "Importing..." : `Import ${year}`}
         </Button>
       </div>
 
@@ -58,9 +58,9 @@ export function ImportWorkbook({ year }: { year: number }) {
             <thead>
               <tr className="bg-muted/50 text-left">
                 <th className="px-3 py-2 font-medium">Total</th>
-                <th className="px-3 py-2 text-right font-medium">Folha</th>
-                <th className="px-3 py-2 text-right font-medium">Importado</th>
-                <th className="px-3 py-2 text-center font-medium">Bate</th>
+                <th className="px-3 py-2 text-right font-medium">Sheet</th>
+                <th className="px-3 py-2 text-right font-medium">Imported</th>
+                <th className="px-3 py-2 text-center font-medium">Match</th>
               </tr>
             </thead>
             <tbody>
@@ -75,7 +75,7 @@ export function ImportWorkbook({ year }: { year: number }) {
                     className={`px-3 py-1.5 text-center ${
                       c.ok ? "text-primary" : "text-destructive"
                     }`}>
-                    {c.ok ? "sim" : "NAO"}
+                    {c.ok ? "yes" : "NO"}
                   </td>
                 </tr>
               ))}

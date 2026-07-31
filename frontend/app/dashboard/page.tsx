@@ -4,6 +4,7 @@ import { useState } from "react";
 import useRequireAuth from "../../src/hooks/useRequireAuth";
 import { BudgetGrid } from "../../src/components/BudgetGrid";
 import { ImportWorkbook } from "../../src/components/ImportWorkbook";
+import { ThemeToggle } from "../../src/components/ThemeToggle";
 
 export default function DashboardPage() {
   const { user, loading } = useRequireAuth("/");
@@ -14,10 +15,10 @@ export default function DashboardPage() {
   return (
     <main className="mx-auto max-w-[1400px] space-y-8 p-8">
       <header className="flex items-baseline justify-between">
-        <h1 className="text-3xl font-bold">Orcamento</h1>
+        <h1 className="text-3xl font-bold">Budget</h1>
         <div className="flex items-center gap-2">
           <label htmlFor="year" className="text-sm text-muted-foreground">
-            Ano
+            Year
           </label>
           <input
             id="year"
@@ -26,6 +27,7 @@ export default function DashboardPage() {
             onChange={(e) => setYear(Number(e.target.value))}
             className="w-24 rounded-md border px-2 py-1 text-sm"
           />
+          <ThemeToggle />
         </div>
       </header>
 

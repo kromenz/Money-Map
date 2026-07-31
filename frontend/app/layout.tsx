@@ -17,8 +17,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="pt" className={cn("font-sans", geist.variable)}>
-      <body>
+    // suppressHydrationWarning no <html> porque o next-themes poe a classe do
+    // tema antes da hidratacao, e no <body> porque extensoes do browser
+    // (Bitdefender e afins) injetam atributos como bis_register antes do React
+    // arrancar. So afeta os atributos destes dois elementos, nao os filhos.
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={cn("font-sans", geist.variable)}>
+      <body suppressHydrationWarning>
         <Providers>{children}</Providers>
       </body>
     </html>

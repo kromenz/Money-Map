@@ -6,16 +6,17 @@ import { fetchGrid } from "../services/budget.service";
 import type { GridRow } from "../types/budget";
 import { Skeleton } from "@/components/ui/skeleton";
 
-const MONTHS = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN",
-                "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
+const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+                "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
 const SECTION_LABEL: Record<string, string> = {
-  income: "Receitas",
-  savings: "Poupancas",
-  expenses: "Despesas",
+  income: "Income",
+  savings: "Savings",
+  expenses: "Expenses",
 };
 
-const eur = new Intl.NumberFormat("pt-PT", {
+// Locale fixo (nao o do browser) para o servidor e o cliente formatarem igual.
+const eur = new Intl.NumberFormat("en-IE", {
   style: "currency",
   currency: "EUR",
 });
@@ -48,7 +49,7 @@ export function BudgetGrid({ year }: { year: number }) {
   if (isError)
     return (
       <p className="text-destructive">
-        Nao consegui carregar a grelha: {(error as Error).message}
+        Could not load the grid: {(error as Error).message}
       </p>
     );
   if (!data) return null;
@@ -61,14 +62,14 @@ export function BudgetGrid({ year }: { year: number }) {
         <thead>
           <tr className="bg-muted/50">
             <th className="sticky left-0 z-10 bg-muted/50 px-3 py-2 text-left font-medium">
-              Categoria
+              Category
             </th>
             {MONTHS.map((m) => (
               <th key={m} className="px-3 py-2 text-right font-medium">
                 {m}
               </th>
             ))}
-            <th className="px-3 py-2 text-right font-semibold">Ano</th>
+            <th className="px-3 py-2 text-right font-semibold">Year</th>
           </tr>
         </thead>
         {/*

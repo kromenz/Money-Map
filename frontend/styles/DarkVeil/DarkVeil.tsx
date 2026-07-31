@@ -82,7 +82,10 @@ type Props = {
   speed?: number;
   scanlineFrequency?: number;
   warpAmount?: number;
+  /** Fracao do tamanho em CSS px usada no buffer de render. 1 = resolucao nativa. */
   resolutionScale?: number;
+  /** Limite de frames por segundo do shader. */
+  maxFps?: number;
 };
 
 export default function DarkVeil({
@@ -92,17 +95,22 @@ export default function DarkVeil({
   speed = 0.5,
   scanlineFrequency = 0,
   warpAmount = 0,
-  resolutionScale = 1,
+  resolutionScale = 0.5,
+  maxFps = 30,
 }: Props) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
-    const canvas = ref.current as HTMLCanvasElement;
-    const parent = canvas.parentElement as HTMLElement;
+    const canvas = ref.current;
+    const parent = canvas?.parentElement;
+    if (!canvas || !parent) return;
 
-    const renderer = new Renderer({
-      dpr: Math.min(window.devicePixelRatio, 2),
-      canvas,
-    });
+    // O fragment shader avalia uma rede CPPN por pixel, por frame. O custo e
+    // proporcional aos pixeis do buffer, por isso o dpr fica limitado a 1 e
+    // ainda e reduzido pelo resolutionScale. O canvas continua a ocupar o
+    // tamanho todo em CSS px, so o buffer e que e menor e esticado.
+    const dpr = Math.min(window.devicePixelRatio || 1, 1) * resolutionScale;
+
+    const renderer = new Renderer({ dpr, canvas, antialias: false });
 
     const gl = renderer.gl;
     const geometry = new Triangle(gl);
@@ -124,35 +132,66 @@ export default function DarkVeil({
     const mesh = new Mesh(gl, { geometry, program });
 
     const resize = () => {
-      const w = parent.clientWidth,
-        h = parent.clientHeight;
-      renderer.setSize(w * resolutionScale, h * resolutionScale);
-      program.uniforms.uResolution.value.set(w, h);
+      renderer.setSize(parent.clientWidth, parent.clientHeight);
+      // gl_FragCoord vem em pixeis do buffer, logo uResolution tem de ser o
+      // tamanho do buffer para a imagem nao depender do resolutionScale.
+      program.uniforms.uResolution.value.set(gl.canvas.width, gl.canvas.height);
     };
 
     window.addEventListener("resize", resize);
     resize();
 
-    const start = performance.now();
-    let frame = 0;
-
-    const loop = () => {
-      program.uniforms.uTime.value =
-        ((performance.now() - start) / 1000) * speed;
+    const draw = (elapsed: number) => {
+      program.uniforms.uTime.value = (elapsed / 1000) * speed;
       program.uniforms.uHueShift.value = hueShift;
       program.uniforms.uNoise.value = noiseIntensity;
       program.uniforms.uScan.value = scanlineIntensity;
       program.uniforms.uScanFreq.value = scanlineFrequency;
       program.uniforms.uWarp.value = warpAmount;
       renderer.render({ scene: mesh });
-      frame = requestAnimationFrame(loop);
     };
 
-    loop();
+    const cleanup = () => {
+      window.removeEventListener("resize", resize);
+      program.remove();
+      geometry.remove();
+    };
+
+    // Sem animacao quando o utilizador pediu movimento reduzido: um frame e para.
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      draw(0);
+      return cleanup;
+    }
+
+    const start = performance.now();
+    const frameInterval = 1000 / maxFps;
+    let frame = 0;
+    let lastDraw = -Infinity;
+
+    const loop = (now: number) => {
+      frame = requestAnimationFrame(loop);
+      if (now - lastDraw < frameInterval) return;
+      lastDraw = now;
+      draw(now - start);
+    };
+
+    frame = requestAnimationFrame(loop);
+
+    // Fora do ecra (scroll ou rota tapada) nao ha nada para desenhar.
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        if (!frame) frame = requestAnimationFrame(loop);
+      } else {
+        cancelAnimationFrame(frame);
+        frame = 0;
+      }
+    });
+    observer.observe(canvas);
 
     return () => {
       cancelAnimationFrame(frame);
-      window.removeEventListener("resize", resize);
+      observer.disconnect();
+      cleanup();
     };
   }, [
     hueShift,
@@ -162,6 +201,7 @@ export default function DarkVeil({
     scanlineFrequency,
     warpAmount,
     resolutionScale,
+    maxFps,
   ]);
   return <canvas ref={ref} className="w-full h-full block" />;
 }
