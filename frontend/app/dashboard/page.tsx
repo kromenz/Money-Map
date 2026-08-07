@@ -52,12 +52,28 @@ export default function DashboardPage() {
       );
     }
 
-    if (!data || activeMonth === null || !metrics || !detail) {
+    // Nada importado: sem linhas nao ha nem estrutura de categorias.
+    if (!data || data.rows.length === 0) {
       return (
         <div className="rounded-lg border p-8 text-center">
           <p className="font-medium">No data for {year}</p>
           <p className="mt-1 text-sm text-muted-foreground">
             Import an .xlsx workbook above to get started.
+          </p>
+        </div>
+      );
+    }
+
+    // Ha categorias mas nenhum mes tem movimento (lastActiveMonth === null).
+    // O backend devolve sectionTotals para qualquer seccao com categorias, por
+    // isso este caso e real e nao deve pedir uma importacao que ja foi feita --
+    // a "Full table" logo abaixo mostra a estrutura toda.
+    if (activeMonth === null || !metrics || !detail) {
+      return (
+        <div className="rounded-lg border p-8 text-center">
+          <p className="font-medium">No movement in {year}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            The categories are imported, but no month has any amounts yet.
           </p>
         </div>
       );
