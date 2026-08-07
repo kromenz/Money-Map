@@ -26,6 +26,17 @@ export function MonthSelectorChart({
 }) {
   const data = months.map((m) => ({ ...m, label: MONTH_LABELS[m.month] }));
 
+  // Reutilizado nas duas <Bar>: elementos React sao descricoes imutaveis,
+  // seguros de usar como filhos em dois sitios.
+  const cells = data.map((d) => (
+    <Cell
+      key={d.month}
+      opacity={d.month === selectedMonth ? 1 : 0.45}
+      onClick={() => onSelectMonth(d.month)}
+      cursor="pointer"
+    />
+  ));
+
   return (
     <ChartContainer config={config} className="h-48 w-full">
       <BarChart data={data} barCategoryGap={2}>
@@ -33,29 +44,15 @@ export function MonthSelectorChart({
           dataKey="label"
           tickLine={false}
           axisLine={false}
-          tickFormatter={(v: string) => v.charAt(0)}
+          interval={1}
           className="text-[10px]"
         />
         <ChartTooltip content={<ChartTooltipContent />} />
         <Bar dataKey="income" fill="var(--chart-income)" radius={2}>
-          {data.map((d) => (
-            <Cell
-              key={d.month}
-              opacity={d.month === selectedMonth ? 1 : 0.45}
-              onClick={() => onSelectMonth(d.month)}
-              cursor="pointer"
-            />
-          ))}
+          {cells}
         </Bar>
         <Bar dataKey="expenses" fill="var(--chart-expenses)" radius={2}>
-          {data.map((d) => (
-            <Cell
-              key={d.month}
-              opacity={d.month === selectedMonth ? 1 : 0.45}
-              onClick={() => onSelectMonth(d.month)}
-              cursor="pointer"
-            />
-          ))}
+          {cells}
         </Bar>
       </BarChart>
     </ChartContainer>
