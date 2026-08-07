@@ -20,9 +20,3 @@ export interface SignUpPayload {
   email: string;
   password: string;
 }
-
-export interface Props {
-  isSignup: boolean;
-  onSignUp?: (payload: SignUpPayload) => Promise<void> | void;
-  loading?: boolean;
-}
