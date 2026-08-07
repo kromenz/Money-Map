@@ -1,14 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import useRequireAuth from "../../src/hooks/useRequireAuth";
 import { BudgetGrid } from "../../src/components/BudgetGrid";
 import { ImportWorkbook } from "../../src/components/ImportWorkbook";
 import { ThemeToggle } from "../../src/components/ThemeToggle";
+import { YearRail } from "../../src/components/dashboard/YearRail";
+import { fetchGrid } from "../../src/services/budget.service";
+import { yearMetrics } from "../../src/lib/budget-metrics";
 
 export default function DashboardPage() {
   const { user, loading } = useRequireAuth("/");
   const [year, setYear] = useState(new Date().getFullYear());
+  // null significa "usa o predefinido" -- o ultimo mes com movimento. Guardar
+  // um indice fixo apontaria para um mes vazio depois de trocar de ano.
+  const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
+
+  const { data } = useQuery({
+    queryKey: ["budget-grid", year],
+    queryFn: () => fetchGrid(year),
+    enabled: Boolean(user),
+  });
+
+  const metrics = useMemo(() => (data ? yearMetrics(data) : null), [data]);
+  const activeMonth = selectedMonth ?? metrics?.lastActiveMonth ?? null;
 
   if (loading || !user) return null;
 
@@ -24,7 +40,10 @@ export default function DashboardPage() {
             id="year"
             type="number"
             value={year}
-            onChange={(e) => setYear(Number(e.target.value))}
+            onChange={(e) => {
+              setYear(Number(e.target.value));
+              setSelectedMonth(null);
+            }}
             className="w-24 rounded-md border px-2 py-1 text-sm"
           />
           <ThemeToggle />
@@ -32,7 +51,29 @@ export default function DashboardPage() {
       </header>
 
       <ImportWorkbook year={year} />
-      <BudgetGrid year={year} />
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-1">
+          {metrics && activeMonth !== null && (
+            <YearRail
+              year={year}
+              metrics={metrics}
+              selectedMonth={activeMonth}
+              onSelectMonth={setSelectedMonth}
+            />
+          )}
+        </div>
+        <div className="lg:col-span-2" />
+      </div>
+
+      <details className="rounded-lg border p-4">
+        <summary className="cursor-pointer text-sm font-medium">
+          Full table
+        </summary>
+        <div className="mt-4">
+          <BudgetGrid year={year} />
+        </div>
+      </details>
     </main>
   );
 }
