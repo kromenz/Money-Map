@@ -25,11 +25,18 @@
   --radius: 0.625rem;
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  /* Semanticas das tres seccoes */
+  --chart-income: oklch(0.62 0.16 150);
+  --chart-expenses: oklch(0.60 0.20 25);
+  --chart-savings: oklch(0.58 0.16 255);
+
+  /* Rampa para os grupos de despesa no donut */
+  --chart-1: oklch(0.60 0.20 25);
+  --chart-2: oklch(0.65 0.17 55);
+  --chart-3: oklch(0.70 0.14 90);
+  --chart-4: oklch(0.62 0.15 160);
+  --chart-5: oklch(0.58 0.15 230);
+  --chart-6: oklch(0.55 0.16 300);
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -60,11 +67,16 @@
   --ring: oklch(0.556 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --chart-income: oklch(0.72 0.18 150);
+  --chart-expenses: oklch(0.70 0.20 25);
+  --chart-savings: oklch(0.70 0.16 255);
+
+  --chart-1: oklch(0.70 0.20 25);
+  --chart-2: oklch(0.75 0.17 55);
+  --chart-3: oklch(0.80 0.14 90);
+  --chart-4: oklch(0.72 0.15 160);
+  --chart-5: oklch(0.70 0.15 230);
+  --chart-6: oklch(0.68 0.16 300);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
@@ -111,6 +123,10 @@
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+  --color-chart-6: var(--chart-6);
+  --color-chart-income: var(--chart-income);
+  --color-chart-expenses: var(--chart-expenses);
+  --color-chart-savings: var(--chart-savings);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
   --radius-xl: calc(var(--radius) * 1.4);
