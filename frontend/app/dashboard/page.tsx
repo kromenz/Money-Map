@@ -7,8 +7,10 @@ import { BudgetGrid } from "../../src/components/BudgetGrid";
 import { ImportWorkbook } from "../../src/components/ImportWorkbook";
 import { ThemeToggle } from "../../src/components/ThemeToggle";
 import { YearRail } from "../../src/components/dashboard/YearRail";
+import { MonthPanel } from "../../src/components/dashboard/MonthPanel";
 import { fetchGrid } from "../../src/services/budget.service";
-import { yearMetrics } from "../../src/lib/budget-metrics";
+import { yearMetrics, monthDetail } from "../../src/lib/budget-metrics";
+import { MONTH_LABELS } from "../../src/lib/format";
 
 export default function DashboardPage() {
   const { user, loading } = useRequireAuth("/");
@@ -25,6 +27,10 @@ export default function DashboardPage() {
 
   const metrics = useMemo(() => (data ? yearMetrics(data) : null), [data]);
   const activeMonth = selectedMonth ?? metrics?.lastActiveMonth ?? null;
+  const detail = useMemo(
+    () => (data && activeMonth !== null ? monthDetail(data, activeMonth) : null),
+    [data, activeMonth]
+  );
 
   if (loading || !user) return null;
 
@@ -63,7 +69,14 @@ export default function DashboardPage() {
             />
           )}
         </div>
-        <div className="lg:col-span-2" />
+        <div className="lg:col-span-2">
+          {detail && (
+            <MonthPanel
+              detail={detail}
+              monthLabel={MONTH_LABELS[detail.month]}
+            />
+          )}
+        </div>
       </div>
 
       <details className="rounded-lg border p-4">
