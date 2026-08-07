@@ -38,7 +38,7 @@ export function MonthPanel({
           <h3 className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
             Top categories
           </h3>
-          <TopCategories items={detail.topCategories} />
+          <TopCategories topCategories={detail.topCategories} />
         </div>
       </div>
     </section>
