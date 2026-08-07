@@ -218,4 +218,41 @@ describe("monthDetail", () => {
     expect(d.unallocated).toBe(400);
     expect(d.savingsRate).toBeCloseTo(0.2);
   });
+
+  it("reembolsos (quantidades negativas) aparecem em topCategories, ordenados por ultimo", () => {
+    const rows = [
+      row("A", "G", { 0: 100 }),
+      row("B", "G", { 0: 80 }),
+      row("C", "G", { 0: 60 }),
+      row("Refund", "G", { 0: -30 }),
+    ];
+    const d = monthDetail(
+      grid([total("expenses", { 0: 210 })], rows),
+      0
+    );
+
+    expect(d.topCategories).toHaveLength(4);
+    expect(d.topCategories[3]).toEqual({ name: "Refund", group: "G", amount: -30 });
+    expect(d.topCategories.map((c) => c.amount)).toEqual([100, 80, 60, -30]);
+  });
+
+  it("reembolsos em Other reduzem o total do Other e refletem-se no byGroup", () => {
+    const rows = [
+      row("A", "G", { 0: 60 }),
+      row("B", "G", { 0: 50 }),
+      row("C", "G", { 0: 40 }),
+      row("D", "G", { 0: 30 }),
+      row("E", "G", { 0: 20 }),
+      row("F", "G", { 0: 7 }),
+      row("Refund", "G", { 0: -5 }),
+    ];
+    const d = monthDetail(
+      grid([total("expenses", { 0: 202 })], rows),
+      0
+    );
+
+    expect(d.topCategories).toHaveLength(6);
+    expect(d.topCategories[5]).toEqual({ name: "Other", group: "", amount: 2 });
+    expect(d.byGroup[0]).toEqual({ group: "G", amount: 202 });
+  });
 });

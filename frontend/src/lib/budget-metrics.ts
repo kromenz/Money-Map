@@ -94,6 +94,14 @@ export function monthDetail(
       group: r.group === "" ? UNGROUPED : r.group,
       amount: Number(r.months[monthIndex]),
     }))
+    // Reembolsos chegam como valores negativos (o backend inverte o sinal de
+    // tudo o que nao seja "income"). Uma categoria-mes so fica negativa quando
+    // os reembolsos superam o gasto nesse mes - raro, mas real - e o valor
+    // liquido e a resposta correcta para o que a categoria custou de facto.
+    // Nao filtramos nem fazemos clamp aqui: isso quebraria a reconciliacao
+    // entre byGroup, topCategories e os totais da seccao. Camadas de
+    // apresentacao que nao conseguem desenhar valores negativos (ex.: fatias
+    // de um grafico circular) devem filtrar no momento de renderizar, nao aqui.
     .filter((r) => r.amount !== 0)
     .sort((a, b) => b.amount - a.amount);
 
