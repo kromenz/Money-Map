@@ -49,19 +49,35 @@ export function BudgetGrid({ year }: { year: number }) {
   const sections = ["income", "savings", "expenses"] as const;
 
   return (
-    <div className="overflow-x-auto rounded-lg border">
+    // O overflow-x fica como rede de seguranca para ecras estreitos, mas com
+    // px-2 as 14 colunas ja cabem sem scroll na largura da pagina.
+    //
+    // A max-h nao e cosmetica: overflow-x-auto faz o browser calcular
+    // overflow-y: auto tambem, logo esta div e um scroll container. Sem altura
+    // limitada nunca ha scroll vertical dentro dela e o sticky do cabecalho
+    // fica inerte -- colava-se ao topo da div, que desaparece com a pagina.
+    <div className="max-h-[70vh] overflow-auto rounded-lg border">
       <table className="w-full border-collapse text-sm">
         <thead>
+          {/*
+            Cabecalho colado ao topo: com dezenas de categorias perde-se de vista
+            que coluna e que mes. O canto acumula sticky no topo e a esquerda, por
+            isso precisa de z maior que as duas faixas que atravessa.
+          */}
           <tr className="bg-muted/50">
-            <th className="sticky left-0 z-10 bg-muted/50 px-3 py-2 text-left font-medium">
+            <th className="sticky left-0 top-0 z-30 bg-muted/50 px-2 py-2 text-left font-medium">
               Category
             </th>
             {MONTH_LABELS.map((m) => (
-              <th key={m} className="px-3 py-2 text-right font-medium">
+              <th
+                key={m}
+                className="sticky top-0 z-20 bg-muted/50 px-2 py-2 text-right font-medium">
                 {m}
               </th>
             ))}
-            <th className="px-3 py-2 text-right font-semibold">Year</th>
+            <th className="sticky top-0 z-20 bg-muted/50 px-2 py-2 text-right font-semibold">
+              Year
+            </th>
           </tr>
         </thead>
         {/*
@@ -76,7 +92,7 @@ export function BudgetGrid({ year }: { year: number }) {
           return (
             <tbody key={section}>
               <tr className="border-t bg-primary/5">
-                <td className="px-3 py-2 font-semibold" colSpan={14}>
+                <td className="px-2 py-2 font-semibold" colSpan={14}>
                   {SECTION_LABEL[section]}
                 </td>
               </tr>
@@ -86,7 +102,7 @@ export function BudgetGrid({ year }: { year: number }) {
                   {group !== "" && (
                     <tr>
                       <td
-                        className="px-3 py-1.5 text-xs uppercase tracking-wide text-muted-foreground"
+                        className="px-2 py-1.5 text-xs uppercase tracking-wide text-muted-foreground"
                         colSpan={14}>
                         {group}
                       </td>
@@ -94,15 +110,15 @@ export function BudgetGrid({ year }: { year: number }) {
                   )}
                   {groupedRows.map((row) => (
                     <tr key={row.categoryId} className="border-t">
-                      <td className="sticky left-0 z-10 bg-background px-3 py-1.5">
+                      <td className="sticky left-0 z-10 bg-background px-2 py-1.5">
                         {row.name}
                       </td>
                       {row.months.map((v, i) => (
-                        <td key={i} className="px-3 py-1.5 text-right tabular-nums">
+                        <td key={i} className="px-2 py-1.5 text-right tabular-nums">
                           {money(v)}
                         </td>
                       ))}
-                      <td className="px-3 py-1.5 text-right font-medium tabular-nums">
+                      <td className="px-2 py-1.5 text-right font-medium tabular-nums">
                         {money(row.total)}
                       </td>
                     </tr>
@@ -112,15 +128,15 @@ export function BudgetGrid({ year }: { year: number }) {
 
               {total && (
                 <tr className="border-t-2 font-semibold">
-                  <td className="sticky left-0 z-10 bg-background px-3 py-2">
+                  <td className="sticky left-0 z-10 bg-background px-2 py-2">
                     Total {SECTION_LABEL[section]}
                   </td>
                   {total.months.map((v, i) => (
-                    <td key={i} className="px-3 py-2 text-right tabular-nums">
+                    <td key={i} className="px-2 py-2 text-right tabular-nums">
                       {money(v)}
                     </td>
                   ))}
-                  <td className="px-3 py-2 text-right tabular-nums">
+                  <td className="px-2 py-2 text-right tabular-nums">
                     {money(total.total)}
                   </td>
                 </tr>

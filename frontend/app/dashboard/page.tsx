@@ -97,7 +97,9 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="mx-auto max-w-[1400px] space-y-8 p-8">
+    // A grelha completa tem 14 colunas (categoria + 12 meses + ano). Com
+    // max-w-[1400px] e p-8 sobravam ~1300px e nao cabiam sem scroll lateral.
+    <main className="mx-auto w-full max-w-[1800px] space-y-8 p-6 lg:p-8">
       <header className="flex items-baseline justify-between">
         <h1 className="text-3xl font-bold">Budget</h1>
         <div className="flex items-center gap-2">
