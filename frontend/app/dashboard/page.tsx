@@ -20,7 +20,9 @@ export default function DashboardPage() {
   // um indice fixo apontaria para um mes vazio depois de trocar de ano.
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
 
-  const { data, isLoading, isError, error } = useQuery({
+  // isPending cobre pending+fetching, pending+paused (offline) e
+  // pending+disabled -- qualquer estado sem dados ainda, nao so "a carregar".
+  const { data, isPending, isError, error } = useQuery({
     queryKey: ["budget-grid", year],
     queryFn: () => fetchGrid(year),
     enabled: Boolean(user),
@@ -34,6 +36,49 @@ export default function DashboardPage() {
   );
 
   if (loading || !user) return null;
+
+  // Ramos mutuamente exclusivos por construcao (early return), nao por
+  // combinacoes de flags: uma falha no refetch em segundo plano (ex.: apos
+  // importar um ficheiro) mantem os dados antigos em cache, por isso o erro
+  // tem de ganhar ao grelha em vez de as duas aparecerem empilhadas.
+  function renderContent() {
+    if (isPending) return <DashboardSkeleton />;
+
+    if (isError) {
+      return (
+        <p className="text-destructive">
+          Could not load the dashboard: {error.message}
+        </p>
+      );
+    }
+
+    if (!data || activeMonth === null || !metrics || !detail) {
+      return (
+        <div className="rounded-lg border p-8 text-center">
+          <p className="font-medium">No data for {year}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Import an .xlsx workbook above to get started.
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-1">
+          <YearRail
+            year={year}
+            metrics={metrics}
+            selectedMonth={activeMonth}
+            onSelectMonth={setSelectedMonth}
+          />
+        </div>
+        <div className="lg:col-span-2">
+          <MonthPanel detail={detail} monthLabel={MONTH_LABELS[detail.month]} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-[1400px] space-y-8 p-8">
@@ -59,38 +104,7 @@ export default function DashboardPage() {
 
       <ImportWorkbook year={year} />
 
-      {isLoading && <DashboardSkeleton />}
-
-      {isError && (
-        <p className="text-destructive">
-          Could not load the dashboard: {(error as Error).message}
-        </p>
-      )}
-
-      {!isLoading && !isError && activeMonth === null && (
-        <div className="rounded-lg border p-8 text-center">
-          <p className="font-medium">No data for {year}</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Import an .xlsx workbook above to get started.
-          </p>
-        </div>
-      )}
-
-      {metrics && detail && activeMonth !== null && (
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-1">
-            <YearRail
-              year={year}
-              metrics={metrics}
-              selectedMonth={activeMonth}
-              onSelectMonth={setSelectedMonth}
-            />
-          </div>
-          <div className="lg:col-span-2">
-            <MonthPanel detail={detail} monthLabel={MONTH_LABELS[detail.month]} />
-          </div>
-        </div>
-      )}
+      {renderContent()}
 
       <details className="rounded-lg border p-4">
         <summary className="cursor-pointer text-sm font-medium">
