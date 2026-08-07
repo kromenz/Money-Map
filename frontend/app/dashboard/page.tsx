@@ -8,6 +8,7 @@ import { ImportWorkbook } from "../../src/components/ImportWorkbook";
 import { ThemeToggle } from "../../src/components/ThemeToggle";
 import { YearRail } from "../../src/components/dashboard/YearRail";
 import { MonthPanel } from "../../src/components/dashboard/MonthPanel";
+import { DashboardSkeleton } from "../../src/components/dashboard/DashboardSkeleton";
 import { fetchGrid } from "../../src/services/budget.service";
 import { yearMetrics, monthDetail } from "../../src/lib/budget-metrics";
 import { MONTH_LABELS } from "../../src/lib/format";
@@ -19,7 +20,7 @@ export default function DashboardPage() {
   // um indice fixo apontaria para um mes vazio depois de trocar de ano.
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
 
-  const { data } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ["budget-grid", year],
     queryFn: () => fetchGrid(year),
     enabled: Boolean(user),
@@ -58,26 +59,38 @@ export default function DashboardPage() {
 
       <ImportWorkbook year={year} />
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-1">
-          {metrics && activeMonth !== null && (
+      {isLoading && <DashboardSkeleton />}
+
+      {isError && (
+        <p className="text-destructive">
+          Could not load the dashboard: {(error as Error).message}
+        </p>
+      )}
+
+      {!isLoading && !isError && activeMonth === null && (
+        <div className="rounded-lg border p-8 text-center">
+          <p className="font-medium">No data for {year}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Import an .xlsx workbook above to get started.
+          </p>
+        </div>
+      )}
+
+      {metrics && detail && activeMonth !== null && (
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-1">
             <YearRail
               year={year}
               metrics={metrics}
               selectedMonth={activeMonth}
               onSelectMonth={setSelectedMonth}
             />
-          )}
+          </div>
+          <div className="lg:col-span-2">
+            <MonthPanel detail={detail} monthLabel={MONTH_LABELS[detail.month]} />
+          </div>
         </div>
-        <div className="lg:col-span-2">
-          {detail && (
-            <MonthPanel
-              detail={detail}
-              monthLabel={MONTH_LABELS[detail.month]}
-            />
-          )}
-        </div>
-      </div>
+      )}
 
       <details className="rounded-lg border p-4">
         <summary className="cursor-pointer text-sm font-medium">
