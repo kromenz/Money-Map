@@ -16,6 +16,18 @@ import { decideImport } from "@/lib/import-decision";
 /** O ficheiro escolhido e o diff que o servidor devolveu para ele. */
 type Pending = { file: File; diff: PreviewResult };
 
+/**
+ * O WorkbookFormatError do backend devolve uma mensagem legivel em
+ * { error: "..." } no corpo da resposta. err.message de um erro do axios e
+ * so "Request failed with status code 400" -- inutil para o utilizador.
+ */
+function extractErrorMessage(err: unknown): string {
+  const data = (err as { response?: { data?: { error?: unknown } } })?.response
+    ?.data;
+  if (data && typeof data.error === "string") return data.error;
+  return err instanceof Error ? err.message : String(err);
+}
+
 export function ImportWorkbook({
   year,
   compact = false,
@@ -44,7 +56,7 @@ export function ImportWorkbook({
   const preview = useMutation({
     mutationFn: (file: File) => previewWorkbook(file, year),
     onSuccess: (diff, file) => setPending({ file, diff }),
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => toast.error(extractErrorMessage(err)),
   });
 
   const importing = useMutation({
@@ -68,7 +80,7 @@ export function ImportWorkbook({
         );
       }
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => toast.error(extractErrorMessage(err)),
   });
 
   const busy = preview.isPending || importing.isPending;
@@ -98,24 +110,24 @@ export function ImportWorkbook({
     return (
       <div className="space-y-3 rounded-lg border p-4 text-sm">
         <p className="font-medium">
-          {pending.file.name} vs o que ja tens em {year}:
+          {pending.file.name} vs what you already have in {year}:
         </p>
         <ul className="text-muted-foreground">
-          <li>{summary.changed} valores mudam</li>
-          <li>{summary.added} valores novos</li>
-          <li>{summary.removed} valores deixam de existir</li>
-          <li>{summary.equal} iguais</li>
+          <li>{summary.changed} values change</li>
+          <li>{summary.added} new values</li>
+          <li>{summary.removed} values disappear</li>
+          <li>{summary.equal} unchanged</li>
         </ul>
 
         {showDetail && pending.diff.changes.length > 0 && (
           <table className="w-full">
             <thead>
               <tr className="bg-muted/50 text-left">
-                <th className="px-2 py-1 font-medium">Escopo</th>
-                <th className="px-2 py-1 font-medium">Categoria</th>
-                <th className="px-2 py-1 font-medium">Mes</th>
-                <th className="px-2 py-1 text-right font-medium">Antes</th>
-                <th className="px-2 py-1 text-right font-medium">Depois</th>
+                <th className="px-2 py-1 font-medium">Scope</th>
+                <th className="px-2 py-1 font-medium">Category</th>
+                <th className="px-2 py-1 font-medium">Month</th>
+                <th className="px-2 py-1 text-right font-medium">Before</th>
+                <th className="px-2 py-1 text-right font-medium">After</th>
               </tr>
             </thead>
             <tbody>
@@ -142,13 +154,13 @@ export function ImportWorkbook({
               variant="ghost"
               size="sm"
               onClick={() => setShowDetail((s) => !s)}>
-              {showDetail ? "Esconder detalhe" : "Ver detalhe"}
+              {showDetail ? "Hide detail" : "Show detail"}
             </Button>
           )}
           <Button
             disabled={importing.isPending}
             onClick={() => importing.mutate(pending.file)}>
-            {importing.isPending ? "A importar..." : "Importar"}
+            {importing.isPending ? "Importing..." : "Import"}
           </Button>
           <Button
             variant="ghost"
@@ -157,25 +169,28 @@ export function ImportWorkbook({
               setPending(null);
               setShowDetail(false);
             }}>
-            Cancelar
+            Cancel
           </Button>
         </div>
       </div>
     );
   }
 
+  // O rotulo diz o que este ano tem, nao o tamanho da zona -- compact so
+  // controla o espaco ocupado. Um ano recem-criado via YearPills e "compact"
+  // (ha outras categorias) mas ainda esta vazio, e tem de dizer isso.
   const label = busy
-    ? "A ler o ficheiro..."
-    : compact
-      ? `Substituir ${year}`
-      : `Sem dados em ${year}`;
+    ? "Reading the file..."
+    : yearHasData
+      ? `Replace ${year}`
+      : `No data for ${year}`;
 
   return (
     <div className="space-y-4">
       <div
         role="button"
         tabIndex={0}
-        aria-label={`Importar folha para ${year}`}
+        aria-label={`Import sheet for ${year}`}
         onClick={() => !busy && inputRef.current?.click()}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") inputRef.current?.click();
@@ -198,7 +213,7 @@ export function ImportWorkbook({
         <p className={compact ? "font-medium" : "text-lg font-medium"}>{label}</p>
         {!compact && !busy && (
           <p className="mt-1 text-sm text-muted-foreground">
-            Larga aqui a folha .xlsx, ou clica para escolher
+            Drop the .xlsx sheet here, or click to choose
           </p>
         )}
       </div>
@@ -218,33 +233,35 @@ export function ImportWorkbook({
 
       {result && (
         <div className="space-y-3 rounded-lg border p-4 text-sm">
-          <p>
-            {result.structure.categories} categorias em{" "}
-            {result.structure.groups.length} grupos,{" "}
-            {result.transactionsWritten} valores.{" "}
-            {result.structure.comparisonsMade} verificacoes
-            {result.structure.comparisonsSkipped > 0 && (
-              <span className="text-muted-foreground">
-                {" "}
-                ({result.structure.comparisonsSkipped} sem valor na folha, por
-                comparar)
-              </span>
-            )}
-            .
-          </p>
+          {result.allMatch && (
+            <p>
+              {result.structure.categories} categories in{" "}
+              {result.structure.groups.length} groups,{" "}
+              {result.transactionsWritten} values.{" "}
+              {result.structure.comparisonsMade} checks
+              {result.structure.comparisonsSkipped > 0 && (
+                <span className="text-muted-foreground">
+                  {" "}
+                  ({result.structure.comparisonsSkipped} with no value in the
+                  sheet, not compared)
+                </span>
+              )}
+              .
+            </p>
+          )}
 
           {!result.allMatch && (
             <div>
               <p className="font-medium text-destructive">
-                Nada foi gravado. Estes totais nao batem com a folha:
+                Nothing was saved. These totals do not match the sheet:
               </p>
               <table className="mt-2 w-full">
                 <thead>
                   <tr className="bg-muted/50 text-left">
-                    <th className="px-2 py-1 font-medium">Escopo</th>
-                    <th className="px-2 py-1 font-medium">Mes</th>
-                    <th className="px-2 py-1 text-right font-medium">Folha</th>
-                    <th className="px-2 py-1 text-right font-medium">Importado</th>
+                    <th className="px-2 py-1 font-medium">Scope</th>
+                    <th className="px-2 py-1 font-medium">Month</th>
+                    <th className="px-2 py-1 text-right font-medium">Sheet</th>
+                    <th className="px-2 py-1 text-right font-medium">Imported</th>
                   </tr>
                 </thead>
                 <tbody>

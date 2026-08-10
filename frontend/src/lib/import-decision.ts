@@ -17,11 +17,11 @@ export function decideImport(params: {
   busy: boolean;
 }): ImportDecision {
   if (params.busy) {
-    return { action: "reject", reason: "Ja esta a importar" };
+    return { action: "reject", reason: "Already importing" };
   }
 
   if (!params.fileName.toLowerCase().endsWith(".xlsx")) {
-    return { action: "reject", reason: "So aceito ficheiros .xlsx" };
+    return { action: "reject", reason: "Only .xlsx files are accepted" };
   }
 
   return params.yearHasData ? { action: "preview" } : { action: "import" };

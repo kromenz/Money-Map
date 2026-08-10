@@ -110,7 +110,10 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {data && data.rows.length > 0 && (
+      {/* A zona compacta cobre o erro e os dados-com-linhas; o skeleton (isPending)
+          e o estado vazio (dentro de renderContent) tem cada um a sua propria
+          zona de importar, para as duas nunca aparecerem ao mesmo tempo. */}
+      {!isPending && (isError || (data && data.rows.length > 0)) && (
         <ImportWorkbook year={year} compact />
       )}
 

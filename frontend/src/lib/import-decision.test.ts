@@ -52,6 +52,6 @@ describe("decideImport", () => {
       yearHasData: false,
       busy: true,
     });
-    expect(d).toEqual({ action: "reject", reason: "Ja esta a importar" });
+    expect(d).toEqual({ action: "reject", reason: "Already importing" });
   });
 });

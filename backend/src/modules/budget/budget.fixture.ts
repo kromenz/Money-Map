@@ -106,9 +106,10 @@ export async function buildFixtureWorkbook(): Promise<Buffer> {
     },
     // cache do anual em desacordo com os meses (soma 8.37, cache diz 999)
     { kind: "category", label: "Gym", months: [8.37, 0], staleAnnual: 999 },
-    // linha em branco DENTRO do grupo: nao pode ser lida como subtotal
-    { kind: "blank" },
     { kind: "subtotal", months: [129.78, 20] },
+    // linha em branco DENTRO do grupo, DEPOIS do subtotal: se o guard
+    // hasMonths faltar, esta linha reescreve o checksum ja gravado com nulls.
+    { kind: "blank" },
 
     // Grupo chamado "Other", logo a seguir a categorias chamadas "Other".
     { kind: "groupHeader", label: "Other" },
