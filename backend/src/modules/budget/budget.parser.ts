@@ -72,13 +72,19 @@ function textValue(cell: ExcelJS.Cell): string {
   return "";
 }
 
+/**
+ * O ficheiro nao tem o formato esperado. Distinto de um erro interno: a culpa e
+ * do ficheiro, portanto a resposta e 400 e nao 500.
+ */
+export class WorkbookFormatError extends Error {}
+
 function findHeaderRow(ws: ExcelJS.Worksheet): number {
   for (let r = 1; r <= ws.rowCount; r += 1) {
     if (textValue(ws.getCell(r, FIRST_MONTH_COL)).toUpperCase() === "JAN") {
       return r;
     }
   }
-  throw new Error(
+  throw new WorkbookFormatError(
     "Nao encontrei a linha de cabecalho: nenhuma celula da coluna C diz JAN"
   );
 }
@@ -102,7 +108,7 @@ export async function parseBudgetWorkbook(
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buffer as unknown as ArrayBuffer);
   const ws = wb.worksheets[0];
-  if (!ws) throw new Error("O ficheiro nao tem nenhuma folha");
+  if (!ws) throw new WorkbookFormatError("O ficheiro nao tem nenhuma folha");
 
   const headerRow = findHeaderRow(ws);
 
