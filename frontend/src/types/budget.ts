@@ -41,3 +41,31 @@ export type ImportResult = {
   };
   allMatch: boolean;
 };
+
+export type YearWithData = {
+  year: number;
+  transactions: number;
+};
+
+export type CellChange = {
+  scope: string;
+  name: string;
+  month: number;
+  from: string | null;
+  to: string | null;
+  kind: "changed" | "added" | "removed";
+};
+
+export type DiffSummary = {
+  changed: number;
+  added: number;
+  removed: number;
+  equal: number;
+};
+
+/** O mesmo nome que o backend da a isto, para nao haver dois vocabularios. */
+export type PreviewResult = {
+  year: number;
+  summary: DiffSummary;
+  changes: CellChange[];
+};
