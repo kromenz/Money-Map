@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { buildFixtureWorkbook } from "./budget.fixture";
-import { parseBudgetWorkbook, signedAmount } from "./budget.parser";
+import {
+  parseBudgetWorkbook,
+  signedAmount,
+  WorkbookFormatError,
+} from "./budget.parser";
 import type { ParsedWorkbook } from "./budget.parser";
 
 describe("parseBudgetWorkbook", () => {
@@ -126,6 +130,15 @@ describe("parseBudgetWorkbook", () => {
     expect(
       parsed.checksums.groups["expenses/Personal and Family"].months[0]
     ).toBeCloseTo(129.78, 2);
+  });
+});
+
+describe("ficheiros que nao sao folhas de orcamento", () => {
+  it("um ficheiro que nem sequer e um zip da WorkbookFormatError", async () => {
+    // Sem este guard o erro do exceljs escapava e o controller devolvia 500.
+    await expect(
+      parseBudgetWorkbook(Buffer.from("isto nao e um .xlsx"), 2026)
+    ).rejects.toBeInstanceOf(WorkbookFormatError);
   });
 });
 

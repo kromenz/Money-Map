@@ -106,7 +106,18 @@ export async function parseBudgetWorkbook(
   year: number
 ): Promise<ParsedWorkbook> {
   const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(buffer as unknown as ArrayBuffer);
+  try {
+    await wb.xlsx.load(buffer as unknown as ArrayBuffer);
+  } catch (err) {
+    // Um .xlsx e um zip. Se nem isso for, o exceljs lanca um erro seu ("Can't
+    // find end of central directory") que sairia como 500. A culpa continua a
+    // ser do ficheiro.
+    throw new WorkbookFormatError(
+      `Nao consegui ler o ficheiro como .xlsx: ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    );
+  }
   const ws = wb.worksheets[0];
   if (!ws) throw new WorkbookFormatError("O ficheiro nao tem nenhuma folha");
 
