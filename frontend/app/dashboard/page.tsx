@@ -6,6 +6,7 @@ import useRequireAuth from "../../src/hooks/useRequireAuth";
 import { BudgetGrid } from "../../src/components/BudgetGrid";
 import { ImportWorkbook } from "../../src/components/ImportWorkbook";
 import { ThemeToggle } from "../../src/components/ThemeToggle";
+import { YearPills } from "../../src/components/YearPills";
 import { YearRail } from "../../src/components/dashboard/YearRail";
 import { MonthPanel } from "../../src/components/dashboard/MonthPanel";
 import { DashboardSkeleton } from "../../src/components/dashboard/DashboardSkeleton";
@@ -103,18 +104,12 @@ export default function DashboardPage() {
       <header className="flex items-baseline justify-between">
         <h1 className="text-3xl font-bold">Budget</h1>
         <div className="flex items-center gap-2">
-          <label htmlFor="year" className="text-sm text-muted-foreground">
-            Year
-          </label>
-          <input
-            id="year"
-            type="number"
-            value={year}
-            onChange={(e) => {
-              setYear(Number(e.target.value));
+          <YearPills
+            year={year}
+            onSelect={(y) => {
+              setYear(y);
               setSelectedMonth(null);
             }}
-            className="w-24 rounded-md border px-2 py-1 text-sm"
           />
           <ThemeToggle />
         </div>
