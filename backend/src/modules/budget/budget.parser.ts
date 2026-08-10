@@ -167,11 +167,16 @@ export async function parseBudgetWorkbook(
     sortOrder += 1;
     categories.push({ section, group, name: label, sortOrder });
 
+    // section e group sao `let` do ciclo; fixa-los aqui mantem o tipo estreitado
+    // dentro do callback, que de outra forma volta a ver `Section | null`.
+    const rowSection = section;
+    const rowGroup = group;
+
     months.forEach((value, i) => {
       if (value === null || value === 0) return;
       cells.push({
-        section,
-        group,
+        section: rowSection,
+        group: rowGroup,
         name: label,
         month: i + 1,
         sheetValue: value,
