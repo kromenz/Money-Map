@@ -17,9 +17,14 @@ export type ParsedCell = {
   sheetValue: number;
 };
 
+export type MonthlyTotals = {
+  /** 12 posicoes, indice 0 = Janeiro. null = formula sem valor em cache. */
+  months: (number | null)[];
+};
+
 export type SheetChecksums = {
-  sections: Record<Section, number>;
-  groups: Record<string, number>;
+  sections: Record<Section, MonthlyTotals>;
+  groups: Record<string, MonthlyTotals>;
 };
 
 export type ParsedWorkbook = {
@@ -32,7 +37,6 @@ export type ParsedWorkbook = {
 const LABEL_COL = 2;
 const FIRST_MONTH_COL = 3;
 const LAST_MONTH_COL = 14;
-const ANNUAL_COL = 15;
 
 const SECTION_LABELS: Record<string, Section> = {
   Income: "income",
@@ -83,6 +87,14 @@ export function signedAmount(section: Section, sheetValue: number): number {
   return section === "income" ? sheetValue : -sheetValue;
 }
 
+function monthValues(ws: ExcelJS.Worksheet, row: number): (number | null)[] {
+  const out: (number | null)[] = [];
+  for (let c = FIRST_MONTH_COL; c <= LAST_MONTH_COL; c += 1) {
+    out.push(numericValue(ws.getCell(row, c)));
+  }
+  return out;
+}
+
 export async function parseBudgetWorkbook(
   buffer: Buffer,
   year: number
@@ -96,8 +108,13 @@ export async function parseBudgetWorkbook(
 
   const categories: ParsedCategory[] = [];
   const cells: ParsedCell[] = [];
+  const emptyMonths = (): MonthlyTotals => ({ months: Array(12).fill(null) });
   const checksums: SheetChecksums = {
-    sections: { income: 0, savings: 0, expenses: 0 },
+    sections: {
+      income: emptyMonths(),
+      savings: emptyMonths(),
+      expenses: emptyMonths(),
+    },
     groups: {},
   };
 
@@ -107,9 +124,9 @@ export async function parseBudgetWorkbook(
 
   for (let r = headerRow + 1; r <= ws.rowCount; r += 1) {
     const label = textValue(ws.getCell(r, LABEL_COL));
-    const annual = numericValue(ws.getCell(r, ANNUAL_COL));
+    const months = monthValues(ws, r);
+    const hasMonths = months.some((v) => v !== null);
 
-    // Inicio de seccao
     const maybeSection = SECTION_LABELS[label];
     if (maybeSection) {
       section = maybeSection;
@@ -119,44 +136,47 @@ export async function parseBudgetWorkbook(
 
     if (!section) continue;
 
-    // Fim de seccao: guarda o total que a folha declara e fecha
     if (label === SECTION_END_LABEL) {
-      checksums.sections[section] = annual ?? 0;
+      checksums.sections[section] = { months };
       section = null;
       group = "";
       continue;
     }
 
-    // Subtotal de grupo: rotulo vazio
     if (label === "") {
-      if (group !== "" && annual !== null) {
-        checksums.groups[`${section}/${group}`] = annual;
+      // Subtotal de grupo. Exige meses numericos para que uma linha em branco
+      // dentro de um grupo nao seja lida como o subtotal desse grupo.
+      if (group !== "" && hasMonths) {
+        checksums.groups[`${section}/${group}`] = { months };
       }
       continue;
     }
 
-    // Cabecalho de grupo: tem rotulo mas o total anual nao e numerico.
-    // Esta e a regra critica -- ver a tabela na descricao da task.
-    if (annual === null) {
+    // Cabecalho de grupo: tem rotulo mas nenhuma celula de mes.
+    //
+    // A regra anterior era "o total anual nao e numerico", e estava errada: o
+    // Excel omite o valor em cache quando o resultado e zero, portanto toda a
+    // categoria a zeros era lida como grupo, desaparecia, e passava a ser o
+    // grupo das categorias seguintes. E a presenca das celulas que distingue --
+    // um 0 e um valor, ausencia nao e.
+    if (!hasMonths) {
       group = label;
       continue;
     }
 
-    // Categoria
     sortOrder += 1;
     categories.push({ section, group, name: label, sortOrder });
 
-    for (let c = FIRST_MONTH_COL; c <= LAST_MONTH_COL; c += 1) {
-      const value = numericValue(ws.getCell(r, c));
-      if (value === null || value === 0) continue;
+    months.forEach((value, i) => {
+      if (value === null || value === 0) return;
       cells.push({
         section,
         group,
         name: label,
-        month: c - FIRST_MONTH_COL + 1,
+        month: i + 1,
         sheetValue: value,
       });
-    }
+    });
   }
 
   return { year, categories, cells, checksums };

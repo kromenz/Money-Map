@@ -2,13 +2,15 @@ import ExcelJS from "exceljs";
 
 type Row =
   | { kind: "sectionStart"; label: string }
-  | { kind: "groupHeader"; label: string }
+  | { kind: "groupHeader"; label: string; annuallyLabel?: boolean }
   | { kind: "subtotal"; months: (number | null)[] }
   | { kind: "sectionTotal"; months: (number | null)[] }
   | {
       kind: "category";
       label: string;
       months: (number | { formula: string; result: number } | null)[];
+      /** Cache do anual em desacordo com os meses, como acontece no ficheiro real. */
+      staleAnnual?: number | null;
     }
   | { kind: "blank" };
 
@@ -17,6 +19,33 @@ function sum(values: (number | { result: number } | null)[]): number {
     if (v === null) return acc;
     return acc + (typeof v === "number" ? v : v.result);
   }, 0);
+}
+
+/**
+ * O Excel omite o valor em cache das celulas de formula quando o resultado e
+ * zero, e usa formulas partilhadas que nao guardam resultado proprio. Uma
+ * fixture que escreve numeros literais nunca produz esse estado -- foi por isso
+ * que o bug das categorias a zeros sobreviveu aos testes.
+ *
+ * cached === null  -> celula de formula sem <v>, como o Excel faz quando da 0
+ * cached === numero -> celula de formula com valor em cache
+ */
+function formulaCell(cached: number | null) {
+  return cached === null
+    ? { formula: "SUM(C1:N1)" }
+    : { formula: "SUM(C1:N1)", result: cached };
+}
+
+/** Doze meses. As posicoes nao preenchidas ficam a zero, como no template. */
+function twelveMonths(
+  values: (number | { formula: string; result: number } | null)[]
+): (number | { formula: string; result: number })[] {
+  const out: (number | { formula: string; result: number })[] = [];
+  for (let i = 0; i < 12; i += 1) {
+    const v = values[i];
+    out.push(v === null || v === undefined ? 0 : v);
+  }
+  return out;
 }
 
 /**
@@ -33,7 +62,6 @@ export async function buildFixtureWorkbook(): Promise<Buffer> {
 
     { kind: "sectionStart", label: "Income" },
     { kind: "blank" },
-    // JAN=1150, FEV com acerto escrito como formula
     {
       kind: "category",
       label: "Salario",
@@ -41,7 +69,8 @@ export async function buildFixtureWorkbook(): Promise<Buffer> {
     },
     // negativo dentro do Income: desconto, nao despesa
     { kind: "category", label: "IRS", months: [-100, -100] },
-    // categoria sem dados nenhuns: doze meses vazios, total anual a zero
+    // categoria sem dados nenhuns: doze zeros e anual sem cache. E este o caso
+    // que o parser antigo lia como cabecalho de grupo.
     { kind: "category", label: "Real Vida", months: [] },
     { kind: "category", label: "Other", months: [54.7, null] },
     { kind: "sectionTotal", months: [1104.7, 259.21] },
@@ -55,9 +84,14 @@ export async function buildFixtureWorkbook(): Promise<Buffer> {
 
     { kind: "blank" },
     { kind: "sectionStart", label: "Expenses" },
-    { kind: "groupHeader", label: "Home" },
+
+    // Primeiro grupo: leva o rotulo "Annually" na coluna 15, como no real.
+    { kind: "groupHeader", label: "Home", annuallyLabel: true },
     { kind: "category", label: "Mortgage / Rent", months: [] },
     { kind: "subtotal", months: [0, 0] },
+
+    // Segundo grupo: SEM "Annually". Se a classificacao depender desse texto,
+    // este grupo parte.
     { kind: "groupHeader", label: "Personal and Family" },
     {
       kind: "category",
@@ -70,9 +104,19 @@ export async function buildFixtureWorkbook(): Promise<Buffer> {
       label: "Temu",
       months: [{ formula: "27.16-14.99", result: 12.17 }, null],
     },
-    { kind: "category", label: "Other", months: [8.37, 0] },
+    // cache do anual em desacordo com os meses (soma 8.37, cache diz 999)
+    { kind: "category", label: "Gym", months: [8.37, 0], staleAnnual: 999 },
+    // linha em branco DENTRO do grupo: nao pode ser lida como subtotal
+    { kind: "blank" },
     { kind: "subtotal", months: [129.78, 20] },
-    { kind: "sectionTotal", months: [129.78, 20] },
+
+    // Grupo chamado "Other", logo a seguir a categorias chamadas "Other".
+    { kind: "groupHeader", label: "Other" },
+    { kind: "category", label: "Miscellaneous Expenses", months: [5, 0] },
+    { kind: "category", label: "Other", months: [] },
+    { kind: "subtotal", months: [5, 0] },
+
+    { kind: "sectionTotal", months: [134.78, 20] },
   ];
 
   // Linha 1: cabecalho dos meses.
@@ -91,27 +135,36 @@ export async function buildFixtureWorkbook(): Promise<Buffer> {
         ws.getCell(r, 2).value = row.label;
         break;
       case "groupHeader":
+        // Cabecalho de grupo: rotulo e NENHUMA celula de mes. E a ausencia de
+        // meses que o distingue de uma categoria, nao o texto "Annually" --
+        // no ficheiro real so o primeiro grupo de cada seccao o tem.
         ws.getCell(r, 2).value = row.label;
-        // coluna 15 nao numerica -- e isto que o distingue de uma categoria
-        ws.getCell(r, 15).value = "Annually";
+        if (row.annuallyLabel) ws.getCell(r, 15).value = "Annually";
         break;
       case "subtotal":
       case "sectionTotal": {
         if (row.kind === "sectionTotal") ws.getCell(r, 2).value = "Monthly Totals";
-        row.months.forEach((v, i) => {
-          if (v !== null) ws.getCell(r, 3 + i).value = v;
-        });
-        ws.getCell(r, 15).value = sum(row.months);
+        // Os subtotais no ficheiro real sao formulas partilhadas, e quando dao
+        // zero o Excel nao guarda valor em cache (linha 51 do 2026.xlsx). E
+        // este o caso que deixa um escopo por comparar, em vez de o comparar
+        // contra um zero inventado.
+        for (let i = 0; i < 12; i += 1) {
+          const v = row.months[i] ?? 0;
+          ws.getCell(r, 3 + i).value = formulaCell(v || null) as ExcelJS.CellValue;
+        }
+        ws.getCell(r, 15).value = formulaCell(sum(row.months) || null) as ExcelJS.CellValue;
         break;
       }
       case "category": {
         ws.getCell(r, 2).value = row.label;
-        row.months.forEach((v, i) => {
-          if (v === null) return;
-          ws.getCell(r, 3 + i).value =
-            typeof v === "number" ? v : { formula: v.formula, result: v.result };
+        twelveMonths(row.months).forEach((v, i) => {
+          ws.getCell(r, 3 + i).value = v as ExcelJS.CellValue;
         });
-        ws.getCell(r, 15).value = sum(row.months);
+        // O anual e informativo. staleAnnual permite reproduzir a cache
+        // obsoleta que existe no ficheiro real (linha 82 do 2026.xlsx).
+        const cached =
+          row.staleAnnual !== undefined ? row.staleAnnual : sum(row.months) || null;
+        ws.getCell(r, 15).value = formulaCell(cached) as ExcelJS.CellValue;
         break;
       }
     }
