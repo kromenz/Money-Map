@@ -1,7 +1,12 @@
 import { Router } from "express";
 import multer from "multer";
 import { authMiddleware } from "../../middlewares/auth.middleware";
-import { importWorkbook, getGrid } from "./budget.controller";
+import {
+  importWorkbook,
+  previewWorkbook,
+  getGrid,
+  getYears,
+} from "./budget.controller";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -17,6 +22,15 @@ budgetRouter.post(
   importWorkbook
 );
 
+// Mesma forma do /import, mas nao escreve nada.
+budgetRouter.post(
+  "/preview",
+  authMiddleware,
+  upload.single("file"),
+  previewWorkbook
+);
+
 budgetRouter.get("/grid", authMiddleware, getGrid);
+budgetRouter.get("/years", authMiddleware, getYears);
 
 export default budgetRouter;
