@@ -1,23 +1,61 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { importWorkbook } from "../services/budget.service";
-import type { ImportResult } from "../types/budget";
+import {
+  fetchYears,
+  importWorkbook,
+  previewWorkbook,
+} from "../services/budget.service";
+import type { ImportResult, PreviewResult } from "../types/budget";
 import { Button } from "@/components/ui/button";
 import { MONTH_LABELS } from "@/lib/format";
+import { decideImport } from "@/lib/import-decision";
 
-export function ImportWorkbook({ year }: { year: number }) {
+/** O ficheiro escolhido e o diff que o servidor devolveu para ele. */
+type Pending = { file: File; diff: PreviewResult };
+
+export function ImportWorkbook({
+  year,
+  compact = false,
+}: {
+  year: number;
+  compact?: boolean;
+}) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [pending, setPending] = useState<Pending | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [showDetail, setShowDetail] = useState(false);
   const queryClient = useQueryClient();
 
-  const mutation = useMutation({
+  const { data: years } = useQuery({
+    queryKey: ["budget-years"],
+    queryFn: fetchYears,
+  });
+
+  // Enquanto a lista de anos nao chega, assumir que o ano TEM dados. Assumir o
+  // contrario abria uma janela em que largar um ficheiro substituia um ano
+  // cheio sem confirmacao nenhuma. Na duvida, mostra-se o diff.
+  const yearHasData =
+    years === undefined || years.some((y) => y.year === year);
+
+  const preview = useMutation({
+    mutationFn: (file: File) => previewWorkbook(file, year),
+    onSuccess: (diff, file) => setPending({ file, diff }),
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const importing = useMutation({
     mutationFn: (file: File) => importWorkbook(file, year),
     onSuccess: (data) => {
       setResult(data);
+      setPending(null);
+      setShowDetail(false);
       queryClient.invalidateQueries({ queryKey: ["budget-grid", year] });
+      // A lista de anos muda quando um ano passa a ter (ou deixa de ter) dados.
+      queryClient.invalidateQueries({ queryKey: ["budget-years"] });
 
       if (data.allMatch) {
         toast.success(
@@ -33,25 +71,150 @@ export function ImportWorkbook({ year }: { year: number }) {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  const busy = preview.isPending || importing.isPending;
+
+  function handleFile(file: File | undefined) {
+    if (!file) return;
+
+    const decision = decideImport({
+      fileName: file.name,
+      yearHasData,
+      busy,
+    });
+
+    if (decision.action === "reject") {
+      toast.error(decision.reason);
+      return;
+    }
+
+    setResult(null);
+    if (decision.action === "preview") preview.mutate(file);
+    else importing.mutate(file);
+  }
+
+  // Estado de confirmacao: a zona transforma-se na pergunta, sem modal.
+  if (pending) {
+    const { summary } = pending.diff;
+    return (
+      <div className="space-y-3 rounded-lg border p-4 text-sm">
+        <p className="font-medium">
+          {pending.file.name} vs o que ja tens em {year}:
+        </p>
+        <ul className="text-muted-foreground">
+          <li>{summary.changed} valores mudam</li>
+          <li>{summary.added} valores novos</li>
+          <li>{summary.removed} valores deixam de existir</li>
+          <li>{summary.equal} iguais</li>
+        </ul>
+
+        {showDetail && pending.diff.changes.length > 0 && (
+          <table className="w-full">
+            <thead>
+              <tr className="bg-muted/50 text-left">
+                <th className="px-2 py-1 font-medium">Escopo</th>
+                <th className="px-2 py-1 font-medium">Categoria</th>
+                <th className="px-2 py-1 font-medium">Mes</th>
+                <th className="px-2 py-1 text-right font-medium">Antes</th>
+                <th className="px-2 py-1 text-right font-medium">Depois</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pending.diff.changes.map((c) => (
+                <tr key={`${c.scope}-${c.name}-${c.month}`} className="border-t">
+                  <td className="px-2 py-1">{c.scope}</td>
+                  <td className="px-2 py-1">{c.name}</td>
+                  <td className="px-2 py-1">{MONTH_LABELS[c.month - 1]}</td>
+                  <td className="px-2 py-1 text-right tabular-nums">
+                    {c.from ?? "—"}
+                  </td>
+                  <td className="px-2 py-1 text-right tabular-nums">
+                    {c.to ?? "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        <div className="flex items-center gap-2">
+          {pending.diff.changes.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowDetail((s) => !s)}>
+              {showDetail ? "Esconder detalhe" : "Ver detalhe"}
+            </Button>
+          )}
+          <Button
+            disabled={importing.isPending}
+            onClick={() => importing.mutate(pending.file)}>
+            {importing.isPending ? "A importar..." : "Importar"}
+          </Button>
+          <Button
+            variant="ghost"
+            disabled={importing.isPending}
+            onClick={() => {
+              setPending(null);
+              setShowDetail(false);
+            }}>
+            Cancelar
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const label = busy
+    ? "A ler o ficheiro..."
+    : compact
+      ? `Substituir ${year}`
+      : `Sem dados em ${year}`;
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <input
-          ref={inputRef}
-          type="file"
-          accept=".xlsx"
-          className="text-sm file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-sm"
-        />
-        <Button
-          disabled={mutation.isPending}
-          onClick={() => {
-            const file = inputRef.current?.files?.[0];
-            if (!file) return toast.error("Choose an .xlsx file");
-            mutation.mutate(file);
-          }}>
-          {mutation.isPending ? "Importing..." : `Import ${year}`}
-        </Button>
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={`Importar folha para ${year}`}
+        onClick={() => !busy && inputRef.current?.click()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") inputRef.current?.click();
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          handleFile(e.dataTransfer.files?.[0]);
+        }}
+        className={`cursor-pointer rounded-lg border border-dashed text-center transition-colors ${
+          compact ? "px-4 py-3 text-sm" : "px-6 py-12"
+        } ${dragging ? "border-primary bg-primary/5" : "border-muted-foreground/30"} ${
+          busy ? "cursor-wait opacity-60" : ""
+        }`}>
+        <p className={compact ? "font-medium" : "text-lg font-medium"}>{label}</p>
+        {!compact && !busy && (
+          <p className="mt-1 text-sm text-muted-foreground">
+            Larga aqui a folha .xlsx, ou clica para escolher
+          </p>
+        )}
       </div>
+
+      {/* Escondido, mas e ele que da o clique-para-escolher e o teclado. */}
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".xlsx"
+        className="hidden"
+        onChange={(e) => {
+          handleFile(e.target.files?.[0]);
+          // Permite escolher o mesmo ficheiro outra vez a seguir.
+          e.target.value = "";
+        }}
+      />
 
       {result && (
         <div className="space-y-3 rounded-lg border p-4 text-sm">

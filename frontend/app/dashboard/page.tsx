@@ -53,16 +53,11 @@ export default function DashboardPage() {
       );
     }
 
-    // Nada importado: sem linhas nao ha nem estrutura de categorias.
+    // Nada importado: sem linhas nao ha nem estrutura de categorias. A zona de
+    // largar e o proprio estado vazio -- a mensagem "importa acima" apontava
+    // para o componente que agora esta aqui.
     if (!data || data.rows.length === 0) {
-      return (
-        <div className="rounded-lg border p-8 text-center">
-          <p className="font-medium">No data for {year}</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Import an .xlsx workbook above to get started.
-          </p>
-        </div>
-      );
+      return <ImportWorkbook year={year} />;
     }
 
     // Ha categorias mas nenhum mes tem movimento (lastActiveMonth === null).
@@ -115,7 +110,9 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <ImportWorkbook year={year} />
+      {data && data.rows.length > 0 && (
+        <ImportWorkbook year={year} compact />
+      )}
 
       {renderContent()}
 
