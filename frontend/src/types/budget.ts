@@ -19,8 +19,9 @@ export type GridResponse = {
   sectionTotals: SectionTotal[];
 };
 
-export type ChecksumReport = {
+export type MonthComparison = {
   scope: string;
+  month: number;
   sheet: string;
   imported: string;
   ok: boolean;
@@ -30,6 +31,13 @@ export type ImportResult = {
   year: number;
   categoriesCreated: number;
   transactionsWritten: number;
-  checksums: ChecksumReport[];
+  comparisons: MonthComparison[];
+  structure: {
+    sections: number;
+    groups: string[];
+    categories: number;
+    comparisonsMade: number;
+    comparisonsSkipped: number;
+  };
   allMatch: boolean;
 };
