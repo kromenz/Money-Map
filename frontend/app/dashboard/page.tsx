@@ -126,6 +126,10 @@ export default function DashboardPage() {
             onSelect={(y) => {
               setYear(y);
               setSelectedMonth(null);
+              // O relatorio nao tem ano nenhum escrito no ecra -- navegar para
+              // outro ano sem o limpar deixava-o a descrever, em silencio, um
+              // ano que ja nao esta a ser visto.
+              setReport(null);
             }}
           />
           <ThemeToggle />
