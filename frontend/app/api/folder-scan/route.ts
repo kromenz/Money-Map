@@ -30,6 +30,9 @@ let generation = 0;
 /** A API respondeu 401: o varrimento inteiro e descartado, nao guardado. */
 class Unauthenticated extends Error {}
 
+/** O fetch em si falhou (API em baixo) -- descartado tal como o 401 acima. */
+class TransportFailure extends Error {}
+
 function messageOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -63,11 +66,19 @@ async function importOne(folder: string, file: string, year: number, cookie: str
   form.append("file", new Blob([new Uint8Array(buffer)]), file);
   form.append("year", String(year));
 
-  const res = await fetch(`${API_BASE}/budget/import`, {
-    method: "POST",
-    headers: { cookie },
-    body: form,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/budget/import`, {
+      method: "POST",
+      headers: { cookie },
+      body: form,
+    });
+  } catch {
+    // O proprio fetch falhou -- API nao esta a ouvir. Caso normal quando o
+    // frontend arranca antes do container do Docker. Isto nao e uma falha
+    // por ficheiro: o varrimento inteiro tem de ser descartado, nao guardado.
+    throw new TransportFailure();
+  }
 
   if (res.status === 401) throw new Unauthenticated();
   if (res.ok) return;
@@ -102,7 +113,7 @@ async function scan(folder: string, cookie: string): Promise<FolderScanResult> {
       await importOne(folder, file, year, cookie);
       imported.push({ file, year });
     } catch (err) {
-      if (err instanceof Unauthenticated) throw err;
+      if (err instanceof Unauthenticated || err instanceof TransportFailure) throw err;
       failed.push({ file, year, reason: messageOf(err) });
     }
   }
@@ -153,6 +164,18 @@ export async function POST(request: Request) {
     // reiniciar o Next.
     if (err instanceof Unauthenticated) {
       return NextResponse.json({ status: "unauthenticated" } satisfies FolderScanResponse);
+    }
+    // O fetch em si falhou (API em baixo) -- nao e uma falha por ficheiro,
+    // por isso nao ha nada em "imported"/"failed" vindo do scan. Descrito
+    // aqui como uma unica entrada, sem guardar nada na cache.
+    if (err instanceof TransportFailure) {
+      const response: FolderScanResponse = {
+        status: "done",
+        fromCache: false,
+        imported: [],
+        failed: [{ file: folder, year: null, reason: "the API could not be reached" }],
+      };
+      return NextResponse.json(response);
     }
     const response: FolderScanResponse = {
       status: "done",
