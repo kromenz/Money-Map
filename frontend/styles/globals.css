@@ -164,6 +164,21 @@
   }
 }
 
+/*
+ * Esconde a barra de scroll sem tirar o scroll: a roda do rato, o trackpad, o
+ * teclado e o toque continuam a funcionar. Usar so em caixas onde a existencia
+ * de mais conteudo ja e evidente por outra via, porque isto tira a unica pista
+ * visual de que ha mais para ver.
+ */
+@utility no-scrollbar {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* Edge antigo */
+
+  &::-webkit-scrollbar {
+    display: none; /* Chrome, Safari */
+  }
+}
+
 @keyframes gradient-x {
   0%,
   100% {

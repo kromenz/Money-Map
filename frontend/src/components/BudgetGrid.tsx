@@ -68,7 +68,7 @@ export function BudgetGrid({
         limitada nunca ha scroll vertical dentro dela e o sticky do cabecalho
         fica inerte -- colava-se ao topo da div, que desaparece com a pagina.
       */}
-      <div className="max-h-[70vh] overflow-auto rounded-lg border">
+      <div className="no-scrollbar max-h-[70vh] overflow-auto rounded-lg border">
         {/*
           table-fixed: sem ele a largura de cada mes depende do maior numero que
           calha nela, e as colunas dancam ao mudar de ano. Com larguras fixas os
