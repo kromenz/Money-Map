@@ -32,7 +32,7 @@ export type YearMetrics = {
  * Os 12 valores mensais de uma seccao. As seccoes sem categorias nao vem no
  * payload, por isso a ausencia conta como zero.
  */
-function sectionMonths(data: GridResponse, section: string): number[] {
+export function sectionMonths(data: GridResponse, section: string): number[] {
   const found = data.sectionTotals.find((s) => s.section === section);
   if (!found) return Array.from({ length: 12 }, () => 0);
   return found.months.map(Number);
@@ -48,7 +48,7 @@ function sum(values: number[]): number {
  * que ainda nao aconteceu. Usada tanto por lastActiveMonth como pelas medias,
  * para as duas nocoes de "mes activo" nunca poderem divergir.
  */
-function isActiveMonth(m: {
+export function isActiveMonth(m: {
   income: number;
   expenses: number;
   savings: number;
@@ -130,7 +130,7 @@ export type MonthDetail = {
   topCategories: { name: string; group: string; amount: number }[];
 };
 
-const UNGROUPED = "Ungrouped";
+export const UNGROUPED = "Ungrouped";
 const TOP_N = 5;
 // A rampa de composicao tem seis cores e o metodo proibe cicla-las: com sete
 // grupos o setimo ficava com a cor do primeiro. Cinco nomeados mais Other da

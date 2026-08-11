@@ -1,4 +1,5 @@
 import type { GridResponse } from "../types/budget";
+import { isActiveMonth, sectionMonths, UNGROUPED } from "./budget-metrics";
 
 export type CategoryDelta = {
   name: string;
@@ -10,8 +11,6 @@ export type CategoryDelta = {
   /** amount - average, em euros. */
   delta: number;
 };
-
-const UNGROUPED = "Ungrouped";
 
 /**
  * O que foi diferente neste mes, por categoria.
@@ -29,17 +28,17 @@ export function categoryDeltas(
   data: GridResponse,
   monthIndex: number
 ): CategoryDelta[] {
-  const section = (name: string) =>
-    data.sectionTotals.find((s) => s.section === name)?.months.map(Number) ??
-    Array.from({ length: 12 }, () => 0);
+  const inc = sectionMonths(data, "income");
+  const exp = sectionMonths(data, "expenses");
+  const sav = sectionMonths(data, "savings");
 
-  const inc = section("income");
-  const exp = section("expenses");
-  const sav = section("savings");
-
+  // Mesmo predicado do lastActiveMonth em budget-metrics.ts, importado em vez
+  // de reescrito: as duas nocoes de "mes activo" nunca podem divergir.
   const activeIdx: number[] = [];
   for (let i = 0; i < 12; i++) {
-    if (inc[i] !== 0 || exp[i] !== 0 || sav[i] !== 0) activeIdx.push(i);
+    if (isActiveMonth({ income: inc[i], expenses: exp[i], savings: sav[i] })) {
+      activeIdx.push(i);
+    }
   }
   if (activeIdx.length === 0) return [];
 
