@@ -24,6 +24,9 @@ coverage/
 dist/
 build/
 .next/
+# O modo de desenvolvimento escreve aqui, para nao contaminar o .next que o
+# next start serve (ver distDir no frontend/next.config.js).
+.next-dev/
 .nuxt/
 out/
 .vuepress/dist
