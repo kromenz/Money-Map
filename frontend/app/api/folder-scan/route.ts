@@ -22,6 +22,11 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
 let cached: FolderScanResult | null = null;
 let inFlight: Promise<FolderScanResult> | null = null;
 
+// Conta cada varrimento lancado. So o mais recente pode escrever na cache: um
+// varrimento antigo (nao forcado) a terminar depois de um forcado nao pode
+// apagar o resultado mais fresco que o forcado ja deixou.
+let generation = 0;
+
 /** A API respondeu 401: o varrimento inteiro e descartado, nao guardado. */
 class Unauthenticated extends Error {}
 
@@ -44,7 +49,15 @@ function reasonFor(status: number, body: string): string {
 }
 
 async function importOne(folder: string, file: string, year: number, cookie: string) {
-  const buffer = await readFile(path.join(folder, file));
+  let buffer: Buffer;
+  try {
+    buffer = await readFile(path.join(folder, file));
+  } catch {
+    // Erro do fs traz o caminho absoluto embutido na mensagem (ex.: ENOENT
+    // ...open 'C:\...') -- nao pode chegar ao browser. O nome do ficheiro ja
+    // vai na entrada de falha, por isso chega uma mensagem generica aqui.
+    throw new Error("could not be read");
+  }
 
   const form = new FormData();
   form.append("file", new Blob([new Uint8Array(buffer)]), file);
@@ -112,13 +125,18 @@ export async function POST(request: Request) {
   }
 
   if (!inFlight || force) {
-    inFlight = scan(folder, request.headers.get("cookie") ?? "");
+    const gen = ++generation;
+    inFlight = scan(folder, request.headers.get("cookie") ?? "").then((result) => {
+      // So o varrimento mais recente pode escrever no cache: um varrimento
+      // antigo a acabar depois de um forcado apagava dados mais frescos.
+      if (gen === generation) cached = result;
+      return result;
+    });
   }
   const current = inFlight;
 
   try {
     const result = await current;
-    cached = result;
     const response: FolderScanResponse = { status: "done", fromCache: false, ...result };
     return NextResponse.json(response);
   } catch (err) {
