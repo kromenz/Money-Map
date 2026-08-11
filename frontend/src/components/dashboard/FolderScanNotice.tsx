@@ -16,10 +16,12 @@ export function FolderScanNotice({
   if (failed.length === 0) return null;
 
   return (
-    <div className="flex items-start gap-4 rounded-lg border border-destructive/40 bg-destructive/5 p-4">
+    <div
+      role="alert"
+      className="flex items-start gap-4 rounded-lg border border-destructive/40 bg-destructive/5 p-4">
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">
-          Some files in the folder were not imported
+          Not everything in the folder was imported
         </p>
         <ul className="mt-2 space-y-1">
           {failed.map((f, i) => (
