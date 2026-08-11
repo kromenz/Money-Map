@@ -8,6 +8,15 @@ export type MonthPoint = {
   unallocated: number;
 };
 
+/** Medias por mes ACTIVO, nao por mes do calendario. */
+export type MonthAverages = {
+  activeMonths: number;
+  income: number;
+  expenses: number;
+  savings: number;
+  unallocated: number;
+};
+
 export type YearMetrics = {
   income: number;
   expenses: number;
@@ -16,6 +25,7 @@ export type YearMetrics = {
   unallocated: number;
   months: MonthPoint[];
   lastActiveMonth: number | null;
+  averages: MonthAverages;
 };
 
 /**
@@ -30,6 +40,21 @@ function sectionMonths(data: GridResponse, section: string): number[] {
 
 function sum(values: number[]): number {
   return values.reduce((a, b) => a + b, 0);
+}
+
+/**
+ * A variacao relativa de um valor face a media, ou null quando a media e zero.
+ *
+ * Contra zero nao existe variacao percentual, e devolver 0 ou Infinity mentia
+ * das duas maneiras. Devolver null obriga quem desenha a decidir o que mostrar.
+ *
+ * O denominador e o valor ABSOLUTO da media: o que sobra pode ter media
+ * negativa (um ano em defice), e sem o modulo sobrar -50 contra media -100
+ * daria um desvio negativo quando na verdade e melhor que a media.
+ */
+export function deltaVsAverage(value: number, average: number): number | null {
+  if (average === 0) return null;
+  return (value - average) / Math.abs(average);
 }
 
 export function yearMetrics(data: GridResponse): YearMetrics {
@@ -50,6 +75,23 @@ export function yearMetrics(data: GridResponse): YearMetrics {
     if (inc[i] !== 0 || exp[i] !== 0 || sav[i] !== 0) lastActiveMonth = i;
   }
 
+  // O mesmo predicado do lastActiveMonth acima. Um mes sem movimento nenhum nao
+  // e um mes de zero euros: e um mes que ainda nao aconteceu, e entra-lo na
+  // media punha todos os meses reais acima do normal.
+  const active = months.filter(
+    (m) => m.income !== 0 || m.expenses !== 0 || m.savings !== 0
+  );
+  const mean = (pick: (m: MonthPoint) => number) =>
+    active.length === 0 ? 0 : sum(active.map(pick)) / active.length;
+
+  const averages: MonthAverages = {
+    activeMonths: active.length,
+    income: mean((m) => m.income),
+    expenses: mean((m) => m.expenses),
+    savings: mean((m) => m.savings),
+    unallocated: mean((m) => m.unallocated),
+  };
+
   const income = sum(inc);
   const expenses = sum(exp);
   const savings = sum(sav);
@@ -62,6 +104,7 @@ export function yearMetrics(data: GridResponse): YearMetrics {
     unallocated: income - expenses - savings,
     months,
     lastActiveMonth,
+    averages,
   };
 }
 
@@ -78,6 +121,10 @@ export type MonthDetail = {
 
 const UNGROUPED = "Ungrouped";
 const TOP_N = 5;
+// A rampa de composicao tem seis cores e o metodo proibe cicla-las: com sete
+// grupos o setimo ficava com a cor do primeiro. Cinco nomeados mais Other da
+// exactamente seis segmentos.
+const TOP_GROUPS = 5;
 
 export function monthDetail(
   data: GridResponse,
@@ -112,6 +159,16 @@ export function monthDetail(
     (a, b) => b.amount - a.amount
   );
 
+  const cappedGroups = byGroup.slice(0, TOP_GROUPS);
+  if (byGroup.length > TOP_GROUPS) {
+    // Somar, nao descartar: byGroup tem de continuar a reconciliar com o total
+    // da seccao, senao a barra de composicao mente sobre a proporcao.
+    const rest = byGroup
+      .slice(TOP_GROUPS)
+      .reduce((s, g) => s + g.amount, 0);
+    cappedGroups.push({ group: "Other", amount: rest });
+  }
+
   const topCategories = spent.slice(0, TOP_N);
   if (spent.length > TOP_N) {
     const rest = spent.slice(TOP_N).reduce((s, r) => s + r.amount, 0);
@@ -125,7 +182,7 @@ export function monthDetail(
     savings,
     unallocated: income - expenses - savings,
     savingsRate: income > 0 ? savings / income : null,
-    byGroup,
+    byGroup: cappedGroups,
     topCategories,
   };
 }

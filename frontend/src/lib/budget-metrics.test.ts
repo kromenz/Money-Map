@@ -1,10 +1,29 @@
 import { describe, expect, it } from "vitest";
 import type { GridResponse, GridRow, SectionTotal } from "../types/budget";
-import { monthDetail, yearMetrics } from "./budget-metrics";
+import { deltaVsAverage, monthDetail, yearMetrics } from "./budget-metrics";
 
 /** 12 meses em que apenas alguns tem valor. */
 function months(values: Record<number, number>): string[] {
   return Array.from({ length: 12 }, (_, i) => (values[i] ?? 0).toFixed(2));
+}
+
+// Constroi um GridResponse minimo com so os sectionTotals, que e tudo o que o
+// yearMetrics le. As linhas ficam vazias de proposito: quem precisa delas e o
+// monthDetail, que tem os seus proprios testes.
+function gridWith(s: {
+  income: number[];
+  expenses: number[];
+  savings: number[];
+}): GridResponse {
+  return {
+    year: 2026,
+    rows: [],
+    sectionTotals: [
+      { section: "income", months: s.income.map(String), total: "0" },
+      { section: "expenses", months: s.expenses.map(String), total: "0" },
+      { section: "savings", months: s.savings.map(String), total: "0" },
+    ],
+  };
 }
 
 function total(section: string, m: Record<number, number>): SectionTotal {
@@ -254,5 +273,130 @@ describe("monthDetail", () => {
     expect(d.topCategories).toHaveLength(6);
     expect(d.topCategories[5]).toEqual({ name: "Other", group: "", amount: 2 });
     expect(d.byGroup[0]).toEqual({ group: "G", amount: 202 });
+  });
+
+  it("com mais de cinco grupos, os restantes somam-se num Other", () => {
+    // A rampa de composicao tem seis cores e nao se ciclam: o sexto e ultimo
+    // segmento e sempre o Other.
+    const rows = ["A", "B", "C", "D", "E", "F", "G"].map((g, i) => ({
+      categoryId: `c${i}`,
+      section: "expenses" as const,
+      group: g,
+      name: `cat${i}`,
+      // Decrescente, para a ordem dos grupos ser previsivel.
+      months: Array.from({ length: 12 }, () => String(100 - i * 10)),
+      total: "0",
+    }));
+    const data: GridResponse = {
+      year: 2026,
+      rows,
+      sectionTotals: [
+        { section: "expenses", months: Array(12).fill("490"), total: "0" },
+      ],
+    };
+    const d = monthDetail(data, 0);
+    expect(d.byGroup).toHaveLength(6);
+    expect(d.byGroup[5].group).toBe("Other");
+    // F (50) + G (40). Dobrar nao pode perder dinheiro pelo caminho.
+    expect(d.byGroup[5].amount).toBeCloseTo(90, 2);
+  });
+
+  it("dobrar os grupos nao mexe no total da despesa", () => {
+    // A reconciliacao entre byGroup e o total da seccao tem de sobreviver ao
+    // tecto, senao a barra de composicao passa a mentir sobre a proporcao.
+    const rows = ["A", "B", "C", "D", "E", "F", "G"].map((g, i) => ({
+      categoryId: `c${i}`,
+      section: "expenses" as const,
+      group: g,
+      name: `cat${i}`,
+      months: Array.from({ length: 12 }, () => String(100 - i * 10)),
+      total: "0",
+    }));
+    const data: GridResponse = {
+      year: 2026,
+      rows,
+      sectionTotals: [
+        { section: "expenses", months: Array(12).fill("490"), total: "0" },
+      ],
+    };
+    const d = monthDetail(data, 0);
+    const soma = d.byGroup.reduce((s, g) => s + g.amount, 0);
+    expect(soma).toBeCloseTo(d.expenses, 2);
+  });
+});
+
+describe("yearMetrics averages", () => {
+  it("a media ignora os meses sem actividade nenhuma", () => {
+    // Dois meses activos em doze: dividir por doze dava uma media falsa e
+    // todos os meses apareceriam acima do normal.
+    const data = gridWith({
+      income: [1000, 2000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      expenses: [400, 600, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      savings: [100, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    });
+    const m = yearMetrics(data);
+    expect(m.averages.activeMonths).toBe(2);
+    expect(m.averages.income).toBeCloseTo(1500, 2);
+    expect(m.averages.expenses).toBeCloseTo(500, 2);
+    expect(m.averages.savings).toBeCloseTo(100, 2);
+  });
+
+  it("um mes conta como activo se so tiver poupanca", () => {
+    // Mesma regra do lastActiveMonth: receita OU despesa OU poupanca.
+    const data = gridWith({
+      income: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      expenses: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      savings: [0, 250, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    });
+    expect(yearMetrics(data).averages.activeMonths).toBe(1);
+    expect(yearMetrics(data).averages.savings).toBeCloseTo(250, 2);
+  });
+
+  it("um ano completamente vazio nao divide por zero", () => {
+    const data = gridWith({
+      income: Array(12).fill(0),
+      expenses: Array(12).fill(0),
+      savings: Array(12).fill(0),
+    });
+    const m = yearMetrics(data);
+    expect(m.averages.activeMonths).toBe(0);
+    expect(m.averages.income).toBe(0);
+    expect(m.averages.expenses).toBe(0);
+    expect(Number.isNaN(m.averages.savings)).toBe(false);
+  });
+
+  it("a media do que sobra e a media das sobras, nao a sobra das medias", () => {
+    // Neste caso os dois dao o mesmo, mas fixa-se a definicao.
+    const data = gridWith({
+      income: [1000, 2000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      expenses: [400, 600, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      savings: [100, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    });
+    expect(yearMetrics(data).averages.unallocated).toBeCloseTo(900, 2);
+  });
+});
+
+describe("deltaVsAverage", () => {
+  it("um valor igual a media da exactamente zero", () => {
+    expect(deltaVsAverage(500, 500)).toBe(0);
+  });
+
+  it("acima da media da positivo", () => {
+    expect(deltaVsAverage(600, 500)).toBeCloseTo(0.2, 6);
+  });
+
+  it("abaixo da media da negativo", () => {
+    expect(deltaVsAverage(400, 500)).toBeCloseTo(-0.2, 6);
+  });
+
+  it("contra media zero nao ha variacao possivel", () => {
+    // Nao e 0 nem Infinity: e a ausencia de resposta, e quem desenha decide.
+    expect(deltaVsAverage(500, 0)).toBeNull();
+  });
+
+  it("com media negativa o sinal do desvio continua a ler-se", () => {
+    // O que sobra pode ter media negativa (ano em defice). Sobrar -50 quando a
+    // media e -100 e MELHOR que a media, logo desvio positivo.
+    expect(deltaVsAverage(-50, -100)).toBeCloseTo(0.5, 6);
   });
 });
