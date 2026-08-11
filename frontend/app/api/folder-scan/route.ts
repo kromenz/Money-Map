@@ -91,10 +91,14 @@ async function scan(folder: string, cookie: string): Promise<FolderScanResult> {
   try {
     const entries = await readdir(folder, { withFileTypes: true });
     names = entries.filter((e) => e.isFile()).map((e) => e.name);
-  } catch (err) {
+  } catch {
     // Pasta inexistente ou sem permissoes nao e fatal: a app continua a
-    // funcionar com o arrastar-e-largar.
-    return { imported: [], failed: [{ file: folder, year: null, reason: messageOf(err) }] };
+    // funcionar com o arrastar-e-largar. Mensagem fixa: a do fs traz o
+    // caminho absoluto embutido outra vez, e o campo file ja tem a pasta.
+    return {
+      imported: [],
+      failed: [{ file: folder, year: null, reason: "the configured folder could not be read" }],
+    };
   }
 
   const plan = planFolderScan(names);
@@ -181,7 +185,7 @@ export async function POST(request: Request) {
       status: "done",
       fromCache: false,
       imported: [],
-      failed: [{ file: folder, year: null, reason: messageOf(err) }],
+      failed: [{ file: folder, year: null, reason: "the configured folder could not be read" }],
     };
     return NextResponse.json(response);
   } finally {
