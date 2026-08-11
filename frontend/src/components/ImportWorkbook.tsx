@@ -194,8 +194,9 @@ export function ImportWorkbook({
   }
 
   // O rotulo diz o que este ano tem, nao o tamanho da zona -- compact so
-  // controla o espaco ocupado. Um ano recem-criado via YearPills e "compact"
-  // (ha outras categorias) mas ainda esta vazio, e tem de dizer isso.
+  // controla o espaco ocupado. Com a base vazia o ano corrente nao tem dados,
+  // e um import que falha a verificacao deixa o utilizador parado num ano que
+  // continua vazio: nos dois casos o rotulo tem de o dizer.
   const label = busy
     ? "Reading the file..."
     : yearHasData

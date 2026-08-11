@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchYears } from "../services/budget.service";
 import { yearNav } from "@/lib/year-nav";
 import { Button } from "@/components/ui/button";
 
+/**
+ * So navegacao. Adicionar um ano nao se faz aqui: faz-se largando a folha na
+ * zona de import, que le o ano do nome do ficheiro.
+ */
 export function YearPills({
   year,
   onSelect,
@@ -13,31 +16,22 @@ export function YearPills({
   year: number;
   onSelect: (year: number) => void;
 }) {
-  const [adding, setAdding] = useState(false);
-  const [draft, setDraft] = useState(String(year));
-
   const { data } = useQuery({
     queryKey: ["budget-years"],
     queryFn: fetchYears,
   });
 
-  const nav = yearNav((data ?? []).map((y) => y.year), year);
-
-  function commitDraft() {
-    const parsed = Number(draft);
-    // Os mesmos limites do importQuerySchema do backend.
-    if (Number.isInteger(parsed) && parsed >= 2000 && parsed <= 2100) {
-      onSelect(parsed);
-    }
-    setAdding(false);
-  }
+  const nav = yearNav(
+    (data ?? []).map((y) => y.year),
+    year
+  );
 
   return (
     <div className="flex items-center gap-1">
       <Button
         variant="ghost"
         size="sm"
-        aria-label="Ano anterior"
+        aria-label="Previous year"
         disabled={!nav.canGoPrev}
         onClick={() => nav.prev !== null && onSelect(nav.prev)}>
         ‹
@@ -54,36 +48,10 @@ export function YearPills({
         </Button>
       ))}
 
-      {adding ? (
-        <input
-          autoFocus
-          type="number"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commitDraft}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") commitDraft();
-            if (e.key === "Escape") setAdding(false);
-          }}
-          className="w-20 rounded-md border px-2 py-1 text-sm"
-        />
-      ) : (
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-label="Outro ano"
-          onClick={() => {
-            setDraft(String(year));
-            setAdding(true);
-          }}>
-          +
-        </Button>
-      )}
-
       <Button
         variant="ghost"
         size="sm"
-        aria-label="Ano seguinte"
+        aria-label="Next year"
         disabled={!nav.canGoNext}
         onClick={() => nav.next !== null && onSelect(nav.next)}>
         ›
