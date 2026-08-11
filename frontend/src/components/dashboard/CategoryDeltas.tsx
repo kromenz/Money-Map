@@ -13,7 +13,12 @@ const TOP_N = 6;
  * dois vocabularios visuais na mesma pagina obrigavam a aprender ambos.
  */
 export function CategoryDeltas({ deltas }: { deltas: CategoryDelta[] }) {
-  const shown = deltas.slice(0, TOP_N);
+  // Um so mes activo no ano faz media == valor em todas as categorias, logo
+  // delta == 0 em todas -- sem este filtro a lista mostrava seis linhas de
+  // "(-EUR0.00)" com barras de largura zero. O limiar 0.005 e o mesmo que o
+  // KpiCard usa para a mesma decisao (menos de isso e ruido de arredondamento,
+  // nao noticia); mantidos iguais de proposito.
+  const shown = deltas.filter((d) => Math.abs(d.delta) >= 0.005).slice(0, TOP_N);
 
   if (shown.length === 0) {
     return (
@@ -30,7 +35,9 @@ export function CategoryDeltas({ deltas }: { deltas: CategoryDelta[] }) {
   return (
     <ul className="space-y-2">
       {shown.map((d, i) => {
-        const pct = widest === 0 ? 0 : (Math.abs(d.delta) / widest) * 50;
+        // Racio directo do meio-contentor: sem isto multiplicava por 50 aqui e
+        // por 2 no width abaixo, e as duas se cancelavam sem dizer nada.
+        const pct = widest === 0 ? 0 : Math.abs(d.delta) / widest;
         const over = d.delta > 0;
         return (
           // Indice na chave: os nomes vem do ficheiro importado e podem
@@ -52,7 +59,7 @@ export function CategoryDeltas({ deltas }: { deltas: CategoryDelta[] }) {
                 {!over && (
                   <div
                     className="h-full rounded-l-[3px]"
-                    style={{ width: `${pct * 2}%`, background: "var(--chart-savings)" }}
+                    style={{ width: `${pct * 100}%`, background: "var(--chart-savings)" }}
                   />
                 )}
               </div>
@@ -61,7 +68,7 @@ export function CategoryDeltas({ deltas }: { deltas: CategoryDelta[] }) {
                 {over && (
                   <div
                     className="h-full rounded-r-[3px]"
-                    style={{ width: `${pct * 2}%`, background: "var(--chart-expenses)" }}
+                    style={{ width: `${pct * 100}%`, background: "var(--chart-expenses)" }}
                   />
                 )}
               </div>
