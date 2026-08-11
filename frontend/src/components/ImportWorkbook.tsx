@@ -31,12 +31,15 @@ function extractErrorMessage(err: unknown): string {
 export function ImportWorkbook({
   year,
   compact = false,
+  onImportStart,
+  onImported,
 }: {
   year: number;
   compact?: boolean;
+  onImportStart?: () => void;
+  onImported?: (result: ImportResult) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [result, setResult] = useState<ImportResult | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [dragging, setDragging] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
@@ -66,7 +69,7 @@ export function ImportWorkbook({
     mutationFn: ({ file, year }: { file: File; year: number }) =>
       importWorkbook(file, year),
     onSuccess: (data) => {
-      setResult(data);
+      onImported?.(data);
       setPending(null);
       setShowDetail(false);
       // data.year e o ano onde o servidor escreveu, nao o que estava a ser visto.
@@ -105,7 +108,7 @@ export function ImportWorkbook({
       return;
     }
 
-    setResult(null);
+    onImportStart?.();
     if (decision.action === "preview") {
       preview.mutate({ file, year: decision.year });
     } else {
@@ -244,59 +247,6 @@ export function ImportWorkbook({
           e.target.value = "";
         }}
       />
-
-      {result && (
-        <div className="space-y-3 rounded-lg border p-4 text-sm">
-          {result.allMatch && (
-            <p>
-              {result.structure.categories} categories in{" "}
-              {result.structure.groups.length} groups,{" "}
-              {result.transactionsWritten} values.{" "}
-              {result.structure.comparisonsMade} checks
-              {result.structure.comparisonsSkipped > 0 && (
-                <span className="text-muted-foreground">
-                  {" "}
-                  ({result.structure.comparisonsSkipped} with no value in the
-                  sheet, not compared)
-                </span>
-              )}
-              .
-            </p>
-          )}
-
-          {!result.allMatch && (
-            <div>
-              <p className="font-medium text-destructive">
-                Nothing was saved. These totals do not match the sheet:
-              </p>
-              <table className="mt-2 w-full">
-                <thead>
-                  <tr className="bg-muted/50 text-left">
-                    <th className="px-2 py-1 font-medium">Scope</th>
-                    <th className="px-2 py-1 font-medium">Month</th>
-                    <th className="px-2 py-1 text-right font-medium">Sheet</th>
-                    <th className="px-2 py-1 text-right font-medium">Imported</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.comparisons
-                    .filter((c) => !c.ok)
-                    .map((c) => (
-                      <tr key={`${c.scope}-${c.month}`} className="border-t">
-                        <td className="px-2 py-1">{c.scope}</td>
-                        <td className="px-2 py-1">{MONTH_LABELS[c.month - 1]}</td>
-                        <td className="px-2 py-1 text-right tabular-nums">{c.sheet}</td>
-                        <td className="px-2 py-1 text-right tabular-nums">
-                          {c.imported}
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
