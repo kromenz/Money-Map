@@ -30,12 +30,13 @@ function extractErrorMessage(err: unknown): string {
 
 export function ImportWorkbook({
   year,
-  compact = false,
+  variant = "full",
   onImportStart,
   onImported,
 }: {
   year: number;
-  compact?: boolean;
+  /** "square" e a pastilha ao lado do resumo; "full" e a zona grande do estado vazio. */
+  variant?: "square" | "full";
   onImportStart?: () => void;
   onImported?: (result: ImportResult) => void;
 }) {
@@ -199,7 +200,7 @@ export function ImportWorkbook({
     );
   }
 
-  // O rotulo diz o que este ano tem, nao o tamanho da zona -- compact so
+  // O rotulo diz o que este ano tem, nao o tamanho da zona -- variant so
   // controla o espaco ocupado. Com a base vazia o ano corrente nao tem dados,
   // e um import que falha a verificacao deixa o utilizador parado num ano que
   // continua vazio: nos dois casos o rotulo tem de o dizer.
@@ -229,17 +230,24 @@ export function ImportWorkbook({
           setDragging(false);
           handleFile(e.dataTransfer.files?.[0]);
         }}
-        className={`cursor-pointer rounded-lg border border-dashed text-center transition-colors ${
-          compact ? "px-4 py-3 text-sm" : "px-6 py-12"
+        className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed text-center transition-colors ${
+          variant === "square" ? "aspect-square w-28 p-2" : "px-6 py-12"
         } ${dragging ? "border-primary bg-primary/5" : "border-muted-foreground/30"} ${
           busy ? "cursor-wait opacity-60" : ""
         }`}>
-        <p className={compact ? "font-medium" : "text-lg font-medium"}>{label}</p>
+        <p
+          className={
+            variant === "square" ? "text-xs font-medium" : "text-lg font-medium"
+          }>
+          {label}
+        </p>
         {!busy && (
           <p
-            className={`mt-1 text-muted-foreground ${compact ? "text-xs" : "text-sm"}`}>
-            {compact
-              ? "The year comes from the file name."
+            className={`mt-1 text-muted-foreground ${
+              variant === "square" ? "text-[10px] leading-tight" : "text-sm"
+            }`}>
+            {variant === "square"
+              ? "Year from file name"
               : "Drop the .xlsx sheet here, or click to choose. The year comes from the file name."}
           </p>
         )}

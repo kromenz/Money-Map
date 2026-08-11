@@ -17,7 +17,12 @@ import type { ChartConfig } from "@/components/ui/chart";
  * dois formatters do recharts e so uma assinatura suficientemente lata encaixa
  * nos dois.
  */
-export function eurTooltipFormatter(config: ChartConfig) {
+export function eurTooltipFormatter(
+  config: ChartConfig,
+  // As series desenhadas abaixo do zero chegam negativas. Quem as desenha passa
+  // Math.abs para o tooltip nao herdar o sinal do desenho.
+  transform: (n: number) => number = (n) => n
+) {
   return (value: unknown, name: unknown, item: unknown) => {
     const key = String(name);
     const entry = item as
@@ -38,7 +43,7 @@ export function eurTooltipFormatter(config: ChartConfig) {
             {config[key]?.label ?? key}
           </span>
           <span className="font-mono font-medium tabular-nums text-foreground">
-            {formatEur(Number(value))}
+            {formatEur(transform(Number(value)))}
           </span>
         </div>
       </>

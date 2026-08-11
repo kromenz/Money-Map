@@ -8,7 +8,8 @@ import { ImportWorkbook } from "../../src/components/ImportWorkbook";
 import { ImportReport } from "../../src/components/ImportReport";
 import { ThemeToggle } from "../../src/components/ThemeToggle";
 import { YearPills } from "../../src/components/YearPills";
-import { YearRail } from "../../src/components/dashboard/YearRail";
+import { YearSummary } from "../../src/components/dashboard/YearSummary";
+import { CashflowChart } from "../../src/components/dashboard/CashflowChart";
 import { MonthPanel } from "../../src/components/dashboard/MonthPanel";
 import { DashboardSkeleton } from "../../src/components/dashboard/DashboardSkeleton";
 import { fetchGrid } from "../../src/services/budget.service";
@@ -98,18 +99,29 @@ export default function DashboardPage() {
     }
 
     return (
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-1">
-          <YearRail
+      <div className="space-y-6">
+        {/* A faixa do ano: quadrado de largar a esquerda, resumo ao lado, e o
+            grafico com a largura toda por baixo. */}
+        <div className="flex flex-wrap items-start gap-6">
+          <ImportWorkbook
             year={year}
-            metrics={metrics}
-            selectedMonth={activeMonth}
-            onSelectMonth={setSelectedMonth}
+            variant="square"
+            onImportStart={() => setReport(null)}
+            onImported={handleImported}
           />
+          <div className="min-w-0 flex-1">
+            <YearSummary year={year} metrics={metrics} />
+          </div>
         </div>
-        <div className="lg:col-span-2">
-          <MonthPanel detail={detail} monthLabel={MONTH_LABELS[detail.month]} />
-        </div>
+
+        <CashflowChart
+          months={metrics.months}
+          averages={metrics.averages}
+          selectedMonth={activeMonth}
+          onSelectMonth={setSelectedMonth}
+        />
+
+        <MonthPanel detail={detail} monthLabel={MONTH_LABELS[detail.month]} />
       </div>
     );
   }
@@ -135,18 +147,6 @@ export default function DashboardPage() {
           <ThemeToggle />
         </div>
       </header>
-
-      {/* A zona compacta cobre o erro e os dados-com-linhas; o skeleton (isPending)
-          e o estado vazio (dentro de renderContent) tem cada um a sua propria
-          zona de importar, para as duas nunca aparecerem ao mesmo tempo. */}
-      {!isPending && (isError || (data && data.rows.length > 0)) && (
-        <ImportWorkbook
-          year={year}
-          compact
-          onImportStart={() => setReport(null)}
-          onImported={handleImported}
-        />
-      )}
 
       {report && <ImportReport result={report} />}
 
