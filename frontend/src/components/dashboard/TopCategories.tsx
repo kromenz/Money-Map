@@ -34,13 +34,13 @@ export function TopCategories({
     );
   }
 
-  // Ao contrario do ExpenseDonut (que filtra os grupos negativos porque um
-  // <Pie> nao consegue desenhar uma fatia de angulo negativo), aqui mostramos o
-  // valor liquido tal como o monthDetail o calcula: uma categoria fica negativa
-  // quando os reembolsos do mes superam o gasto, e um <BarChart> desenha isso
-  // honestamente. Para o sinal se ler, damos outra cor as barras negativas e
-  // mostramos o zero -- sem linha de referencia a barra crescia para a esquerda
-  // a partir de um eixo invisivel e pesava tanto como um custo.
+  // Ao contrario do GroupComposition (que filtra os grupos negativos porque um
+  // segmento de comprimento negativo nao existe), aqui mostramos o valor liquido
+  // tal como o monthDetail o calcula: uma categoria fica negativa quando os
+  // reembolsos do mes superam o gasto, e um <BarChart> desenha isso honestamente.
+  // Para o sinal se ler, damos outra cor as barras negativas e mostramos o zero
+  // -- sem linha de referencia a barra crescia para a esquerda a partir de um
+  // eixo invisivel e pesava tanto como um custo.
   const hasNegative = topCategories.some((c) => c.amount < 0);
   const data = topCategories.map((c) => ({
     ...c,

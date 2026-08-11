@@ -1,7 +1,7 @@
 "use client";
 
 import { KpiCard } from "./KpiCard";
-import { ExpenseDonut } from "./ExpenseDonut";
+import { GroupComposition } from "./GroupComposition";
 import { TopCategories } from "./TopCategories";
 import { formatEur, formatPercent } from "@/lib/format";
 import type { MonthDetail } from "@/lib/budget-metrics";
@@ -32,7 +32,7 @@ export function MonthPanel({
           <h3 className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
             By group
           </h3>
-          <ExpenseDonut byGroup={detail.byGroup} />
+          <GroupComposition byGroup={detail.byGroup} />
         </div>
         <div className="rounded-lg border p-4">
           <h3 className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
