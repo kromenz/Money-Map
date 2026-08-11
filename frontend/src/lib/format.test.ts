@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MONTH_LABELS, formatEur, formatPercent } from "./format";
+import { MONTH_LABELS, formatAmount, formatEur, formatPercent } from "./format";
 
 describe("MONTH_LABELS", () => {
   it("tem 12 meses de JAN a DEC", () => {
@@ -16,6 +16,24 @@ describe("formatEur", () => {
 
   it("formata negativos", () => {
     expect(formatEur(-42)).toBe("-€42.00");
+  });
+});
+
+describe("formatAmount", () => {
+  it("nao escreve o simbolo da moeda", () => {
+    expect(formatAmount(1234.5)).toBe("1,234.50");
+  });
+
+  it("mantem sempre duas casas decimais", () => {
+    expect(formatAmount(8)).toBe("8.00");
+  });
+
+  it("formata negativos", () => {
+    expect(formatAmount(-42)).toBe("-42.00");
+  });
+
+  it("agrupa os milhares como o formatEur", () => {
+    expect(formatAmount(1234567.89)).toBe("1,234,567.89");
   });
 });
 

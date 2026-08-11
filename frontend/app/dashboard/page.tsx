@@ -255,7 +255,9 @@ export default function DashboardPage() {
           Full table
         </summary>
         <div className="mt-4">
-          <BudgetGrid year={year} />
+          {/* O mes em foco no dashboard fica destacado tambem na grelha, para
+              as duas vistas nao contarem historias separadas. */}
+          <BudgetGrid year={year} selectedMonth={activeMonth} />
         </div>
       </details>
     </main>
