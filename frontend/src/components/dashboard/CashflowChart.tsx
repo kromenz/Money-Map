@@ -26,7 +26,7 @@ const config = {
 // encolheriam as visiveis. Num eixo separado ficam sozinhas e ocupam o mes.
 const HIT_AXIS = "hit";
 
-// Despesa e poupanca chegam ao grafico negativas, para caírem abaixo do zero.
+// Despesa e poupanca chegam ao grafico negativas, para cairem abaixo do zero.
 // O sinal e uma conveniencia de desenho, nao um facto sobre o dinheiro: o
 // tooltip mostra os tres valores em positivo.
 const formatter = eurTooltipFormatter(config, Math.abs);
