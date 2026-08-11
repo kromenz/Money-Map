@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import useRequireAuth from "../../src/hooks/useRequireAuth";
 import { BudgetGrid } from "../../src/components/BudgetGrid";
 import { ImportWorkbook } from "../../src/components/ImportWorkbook";
@@ -12,11 +12,14 @@ import { YearSummary } from "../../src/components/dashboard/YearSummary";
 import { CashflowChart } from "../../src/components/dashboard/CashflowChart";
 import { MonthPanel } from "../../src/components/dashboard/MonthPanel";
 import { DashboardSkeleton } from "../../src/components/dashboard/DashboardSkeleton";
+import { FolderScanNotice } from "../../src/components/dashboard/FolderScanNotice";
 import { fetchGrid } from "../../src/services/budget.service";
+import { scanFolder } from "../../src/services/folder-scan.service";
 import { yearMetrics, monthDetail } from "../../src/lib/budget-metrics";
 import { categoryDeltas } from "../../src/lib/category-deltas";
 import { MONTH_LABELS } from "../../src/lib/format";
 import type { ImportResult } from "../../src/types/budget";
+import type { FolderScanFailure } from "../../src/types/folder-scan";
 
 export default function DashboardPage() {
   const { user, loading } = useRequireAuth("/");
@@ -28,6 +31,12 @@ export default function DashboardPage() {
   // e trocar de ano desmonta a instancia que o estava a mostrar.
   const [report, setReport] = useState<ImportResult | null>(null);
 
+  // A pasta so se sabe configurada depois da primeira resposta do varrimento --
+  // o caminho vive do lado servidor e nunca chega aqui.
+  const [folderConfigured, setFolderConfigured] = useState(false);
+  const [folderFailures, setFolderFailures] = useState<FolderScanFailure[]>([]);
+  const [scanning, setScanning] = useState(false);
+
   // isPending cobre pending+fetching, pending+paused (offline) e
   // pending+disabled -- qualquer estado sem dados ainda, nao so "a carregar".
   const { data, isPending, isError, error } = useQuery({
@@ -35,6 +44,9 @@ export default function DashboardPage() {
     queryFn: () => fetchGrid(year),
     enabled: Boolean(user),
   });
+
+  const queryClient = useQueryClient();
+  const scanned = useRef(false);
 
   const metrics = useMemo(() => (data ? yearMetrics(data) : null), [data]);
   const activeMonth = selectedMonth ?? metrics?.lastActiveMonth ?? null;
@@ -46,6 +58,47 @@ export default function DashboardPage() {
     () => (data && activeMonth !== null ? categoryDeltas(data, activeMonth) : []),
     [data, activeMonth]
   );
+
+  // So depois de a grelha responder: esse pedido passa pelo interceptor que
+  // renova o token, por isso a esta altura o cookie ja esta bom. Varrer antes
+  // apanhava um 401 evitavel.
+  useEffect(() => {
+    if (!data || scanned.current) return;
+    scanned.current = true;
+    void runScan(false);
+  }, [data]);
+
+  async function runScan(force: boolean) {
+    setScanning(true);
+    try {
+      const result = await scanFolder(force);
+
+      if (result.status === "not-configured") {
+        setFolderConfigured(false);
+        return;
+      }
+      setFolderConfigured(true);
+
+      // Sem sessao nao se guarda nada e deixa-se a porta aberta a nova
+      // tentativa; o botao tambem serve para isso.
+      if (result.status === "unauthenticated") {
+        scanned.current = false;
+        return;
+      }
+
+      setFolderFailures(result.failed);
+
+      if (!result.fromCache && result.imported.length > 0) {
+        await queryClient.invalidateQueries({ queryKey: ["budget-grid"] });
+        await queryClient.invalidateQueries({ queryKey: ["budget-years"] });
+      }
+    } catch {
+      // O varrimento e um extra. Se o route handler falhar, o dashboard
+      // continua a servir com o arrastar-e-largar.
+    } finally {
+      setScanning(false);
+    }
+  }
 
   if (loading || !user) return null;
 
@@ -156,6 +209,18 @@ export default function DashboardPage() {
       <header className="flex items-baseline justify-between">
         <h1 className="text-3xl font-bold">Budget</h1>
         <div className="flex items-center gap-2">
+          {/* No cabecalho e nao ao lado do quadrado de largar: o ramo da base
+              vazia usa a versao grande do ImportWorkbook, e o botao ficaria
+              ausente precisamente onde mais se precisa dele. */}
+          {folderConfigured && (
+            <button
+              type="button"
+              onClick={() => void runScan(true)}
+              disabled={scanning}
+              className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50">
+              {scanning ? "Reloading…" : "Reload from folder"}
+            </button>
+          )}
           <YearPills
             year={year}
             onSelect={(y) => {
@@ -170,6 +235,11 @@ export default function DashboardPage() {
           <ThemeToggle />
         </div>
       </header>
+
+      <FolderScanNotice
+        failed={folderFailures}
+        onDismiss={() => setFolderFailures([])}
+      />
 
       {report && <ImportReport result={report} />}
 
