@@ -40,6 +40,12 @@ export function ImportWorkbook({
   onImported?: (result: ImportResult) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  // A zona so monta enquanto isPending for false (ver page.tsx). Trocar de
+  // ano para um que ainda nao esteja em cache desmonta a zona e perde-se este
+  // estado: uma confirmacao pendente desaparece sem aviso. Le-se como um
+  // cancelamento e nao destroi nada (nada foi escrito), por isso fica por
+  // corrigir aqui de proposito -- levantar isto para a pagina, como se fez ao
+  // relatorio, e trabalho a parte.
   const [pending, setPending] = useState<Pending | null>(null);
   const [dragging, setDragging] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
@@ -50,24 +56,24 @@ export function ImportWorkbook({
     queryFn: fetchYears,
   });
 
-  // Enquanto a lista de anos nao chega, assumir que o ano TEM dados. Assumir o
-  // contrario abria uma janela em que largar um ficheiro substituia um ano
-  // cheio sem confirmacao nenhuma. Na duvida, mostra-se o diff.
+  // So alimenta o rotulo abaixo enquanto a lista de anos nao chega -- nao
+  // guarda nada nem mostra diff nenhum. A salvaguarda real (mostrar o diff
+  // quando o ano ja tem dados) vive em decideImport, em import-decision.ts.
   const yearHasData =
     years === undefined || years.some((y) => y.year === year);
 
   // O ano vai no argumento e nao vem do closure: o ficheiro largado pode ser
   // de um ano diferente daquele que esta a ser visto.
   const preview = useMutation({
-    mutationFn: ({ file, year }: { file: File; year: number }) =>
-      previewWorkbook(file, year),
+    mutationFn: ({ file, targetYear }: { file: File; targetYear: number }) =>
+      previewWorkbook(file, targetYear),
     onSuccess: (diff, { file }) => setPending({ file, diff }),
     onError: (err: Error) => toast.error(extractErrorMessage(err)),
   });
 
   const importing = useMutation({
-    mutationFn: ({ file, year }: { file: File; year: number }) =>
-      importWorkbook(file, year),
+    mutationFn: ({ file, targetYear }: { file: File; targetYear: number }) =>
+      importWorkbook(file, targetYear),
     onSuccess: (data) => {
       onImported?.(data);
       setPending(null);
@@ -110,9 +116,9 @@ export function ImportWorkbook({
 
     onImportStart?.();
     if (decision.action === "preview") {
-      preview.mutate({ file, year: decision.year });
+      preview.mutate({ file, targetYear: decision.year });
     } else {
-      importing.mutate({ file, year: decision.year });
+      importing.mutate({ file, targetYear: decision.year });
     }
   }
 
@@ -174,7 +180,7 @@ export function ImportWorkbook({
             onClick={() =>
               importing.mutate({
                 file: pending.file,
-                year: pending.diff.year,
+                targetYear: pending.diff.year,
               })
             }>
             {importing.isPending ? "Importing..." : "Import"}
@@ -208,7 +214,7 @@ export function ImportWorkbook({
       <div
         role="button"
         tabIndex={0}
-        aria-label={`Import sheet for ${year}`}
+        aria-label="Import a sheet. The year comes from the file name."
         onClick={() => !busy && inputRef.current?.click()}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") inputRef.current?.click();
@@ -229,9 +235,12 @@ export function ImportWorkbook({
           busy ? "cursor-wait opacity-60" : ""
         }`}>
         <p className={compact ? "font-medium" : "text-lg font-medium"}>{label}</p>
-        {!compact && !busy && (
-          <p className="mt-1 text-sm text-muted-foreground">
-            Drop the .xlsx sheet here, or click to choose
+        {!busy && (
+          <p
+            className={`mt-1 text-muted-foreground ${compact ? "text-xs" : "text-sm"}`}>
+            {compact
+              ? "The year comes from the file name."
+              : "Drop the .xlsx sheet here, or click to choose. The year comes from the file name."}
           </p>
         )}
       </div>

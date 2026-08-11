@@ -14,8 +14,9 @@ const MAX_YEAR = 2100;
  * 1999-2026.xlsx o ano e 2026.
  */
 export function yearFromFileName(name: string): number | null {
-  for (const match of name.matchAll(/(?<!\d)\d{4}(?!\d)/g)) {
-    const year = Number(match[0]);
+  for (const run of name.match(/\d+/g) ?? []) {
+    if (run.length !== 4) continue;
+    const year = Number(run);
     if (year >= MIN_YEAR && year <= MAX_YEAR) return year;
   }
   return null;

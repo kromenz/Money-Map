@@ -58,6 +58,17 @@ describe("decideImport", () => {
     ).toEqual({ action: "import", year: 2026 });
   });
 
+  it("um ano no nome fora da gama tambem fica o ano que esta a ser visto", () => {
+    expect(
+      decideImport({
+        fileName: "1999.xlsx",
+        viewedYear: 2026,
+        yearsWithData: [],
+        busy: false,
+      })
+    ).toEqual({ action: "import", year: 2026 });
+  });
+
   it("com a lista de anos por chegar assume que o ano tem dados", () => {
     // Assumir o contrario abria uma janela em que largar um ficheiro
     // substituia um ano cheio sem confirmacao nenhuma.

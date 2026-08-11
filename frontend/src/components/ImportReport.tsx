@@ -12,7 +12,7 @@ export function ImportReport({ result }: { result: ImportResult }) {
         <p>
           {result.structure.categories} categories in{" "}
           {result.structure.groups.length} groups,{" "}
-          {result.transactionsWritten} values.{" "}
+          {result.transactionsWritten} values imported into {result.year}.{" "}
           {result.structure.comparisonsMade} checks
           {result.structure.comparisonsSkipped > 0 && (
             <span className="text-muted-foreground">
@@ -28,7 +28,8 @@ export function ImportReport({ result }: { result: ImportResult }) {
       {!result.allMatch && (
         <div>
           <p className="font-medium text-destructive">
-            Nothing was saved. These totals do not match the sheet:
+            Nothing was saved for {result.year}. These totals do not match the
+            sheet:
           </p>
           <table className="mt-2 w-full">
             <thead>

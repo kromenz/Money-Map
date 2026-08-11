@@ -23,6 +23,14 @@ describe("yearFromFileName", () => {
     expect(yearFromFileName("2101.xlsx")).toBeNull();
   });
 
+  it("le o limite inferior da gama", () => {
+    expect(yearFromFileName("2000.xlsx")).toBe(2000);
+  });
+
+  it("le o limite superior da gama", () => {
+    expect(yearFromFileName("2100.xlsx")).toBe(2100);
+  });
+
   it("nao parte uma corrida de cinco digitos", () => {
     // 12026 nao pode dar 2026: o ano tem de ser a corrida toda.
     expect(yearFromFileName("12026.xlsx")).toBeNull();
