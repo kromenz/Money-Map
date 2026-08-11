@@ -3,9 +3,9 @@
 import { Fragment } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchGrid } from "../services/budget.service";
-import type { GridRow } from "../types/budget";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MONTH_LABELS, formatEur } from "@/lib/format";
+import { groupRows } from "@/lib/group-rows";
 
 const SECTION_LABEL: Record<string, string> = {
   income: "Income",
@@ -19,16 +19,6 @@ function money(value: string) {
   return (
     <span className={n < 0 ? "text-destructive" : undefined}>{formatEur(n)}</span>
   );
-}
-
-function groupRows(rows: GridRow[]) {
-  const out: { group: string; rows: GridRow[] }[] = [];
-  for (const row of rows) {
-    const last = out[out.length - 1];
-    if (last && last.group === row.group) last.rows.push(row);
-    else out.push({ group: row.group, rows: [row] });
-  }
-  return out;
 }
 
 export function BudgetGrid({ year }: { year: number }) {
