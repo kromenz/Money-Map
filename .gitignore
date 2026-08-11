@@ -27,6 +27,10 @@ build/
 # O modo de desenvolvimento escreve aqui, para nao contaminar o .next que o
 # next start serve (ver distDir no frontend/next.config.js).
 .next-dev/
+# Gerado pelo Next a cada arranque, e a referencia que ele escreve la dentro
+# alterna entre .next e .next-dev conforme o modo. Versiona-lo so sujava a
+# arvore a cada troca. E o mesmo que o create-next-app faz.
+frontend/next-env.d.ts
 .nuxt/
 out/
 .vuepress/dist
