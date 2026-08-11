@@ -25,18 +25,24 @@
   --radius: 0.625rem;
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  /* Semanticas das tres seccoes */
-  --chart-income: oklch(0.62 0.16 150);
-  --chart-expenses: oklch(0.60 0.20 25);
+  /* Separacao por luminosidade, nao por matiz: verde claro contra vermelho
+     escuro. E o unico canal que a deuteranopia preserva. Validado com o
+     validador do metodo: CVD ΔE 26.4, visao normal 33.7. Nao mexer numa cor
+     isolada -- os valores foram escolhidos como conjunto. */
+  --chart-income: oklch(0.74 0.15 152);
+  --chart-expenses: oklch(0.46 0.19 25);
   --chart-savings: oklch(0.58 0.16 255);
 
-  /* Rampa para os grupos de despesa no donut */
-  --chart-1: oklch(0.60 0.20 25);
-  --chart-2: oklch(0.65 0.17 55);
-  --chart-3: oklch(0.70 0.14 90);
-  --chart-4: oklch(0.62 0.15 160);
-  --chart-5: oklch(0.58 0.15 230);
-  --chart-6: oklch(0.55 0.16 300);
+  /* Rampa de composicao. Matizes 25/230/90/300/160/55 com luminosidade
+     alternada entre vizinhos, para os pares adjacentes se separarem pela
+     luminosidade. Validada com adjacencia linear de 2 a 6 segmentos: pior
+     par estavel em CVD ΔE 23.6, visao normal 38.2. */
+  --chart-1: oklch(0.76 0.16 25);
+  --chart-2: oklch(0.44 0.16 230);
+  --chart-3: oklch(0.76 0.16 90);
+  --chart-4: oklch(0.44 0.16 300);
+  --chart-5: oklch(0.76 0.16 160);
+  --chart-6: oklch(0.44 0.16 55);
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -67,16 +73,20 @@
   --ring: oklch(0.556 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --chart-income: oklch(0.72 0.18 150);
-  --chart-expenses: oklch(0.70 0.20 25);
-  --chart-savings: oklch(0.70 0.16 255);
+  /* No escuro a logica inverte-se: sobre fundo preto um vermelho escuro
+     desaparece, por isso e o verde que desce e o vermelho que sobe.
+     CVD ΔE 7.8 -- dentro da banda 6-8, que so e legal com codificacao
+     secundaria. Ver o comentario no CashflowChart. */
+  --chart-income: oklch(0.54 0.15 152);
+  --chart-expenses: oklch(0.60 0.19 25);
+  --chart-savings: oklch(0.58 0.16 255);
 
-  --chart-1: oklch(0.70 0.20 25);
-  --chart-2: oklch(0.75 0.17 55);
-  --chart-3: oklch(0.80 0.14 90);
-  --chart-4: oklch(0.72 0.15 160);
-  --chart-5: oklch(0.70 0.15 230);
-  --chart-6: oklch(0.68 0.16 300);
+  --chart-1: oklch(0.66 0.15 25);
+  --chart-2: oklch(0.48 0.15 230);
+  --chart-3: oklch(0.66 0.15 90);
+  --chart-4: oklch(0.48 0.15 300);
+  --chart-5: oklch(0.66 0.15 160);
+  --chart-6: oklch(0.48 0.15 55);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
