@@ -53,19 +53,24 @@ export function ImportWorkbook({
   const yearHasData =
     years === undefined || years.some((y) => y.year === year);
 
+  // O ano vai no argumento e nao vem do closure: o ficheiro largado pode ser
+  // de um ano diferente daquele que esta a ser visto.
   const preview = useMutation({
-    mutationFn: (file: File) => previewWorkbook(file, year),
-    onSuccess: (diff, file) => setPending({ file, diff }),
+    mutationFn: ({ file, year }: { file: File; year: number }) =>
+      previewWorkbook(file, year),
+    onSuccess: (diff, { file }) => setPending({ file, diff }),
     onError: (err: Error) => toast.error(extractErrorMessage(err)),
   });
 
   const importing = useMutation({
-    mutationFn: (file: File) => importWorkbook(file, year),
+    mutationFn: ({ file, year }: { file: File; year: number }) =>
+      importWorkbook(file, year),
     onSuccess: (data) => {
       setResult(data);
       setPending(null);
       setShowDetail(false);
-      queryClient.invalidateQueries({ queryKey: ["budget-grid", year] });
+      // data.year e o ano onde o servidor escreveu, nao o que estava a ser visto.
+      queryClient.invalidateQueries({ queryKey: ["budget-grid", data.year] });
       // A lista de anos muda quando um ano passa a ter (ou deixa de ter) dados.
       queryClient.invalidateQueries({ queryKey: ["budget-years"] });
 
@@ -90,7 +95,8 @@ export function ImportWorkbook({
 
     const decision = decideImport({
       fileName: file.name,
-      yearHasData,
+      viewedYear: year,
+      yearsWithData: years?.map((y) => y.year),
       busy,
     });
 
@@ -100,8 +106,11 @@ export function ImportWorkbook({
     }
 
     setResult(null);
-    if (decision.action === "preview") preview.mutate(file);
-    else importing.mutate(file);
+    if (decision.action === "preview") {
+      preview.mutate({ file, year: decision.year });
+    } else {
+      importing.mutate({ file, year: decision.year });
+    }
   }
 
   // Estado de confirmacao: a zona transforma-se na pergunta, sem modal.
@@ -110,7 +119,7 @@ export function ImportWorkbook({
     return (
       <div className="space-y-3 rounded-lg border p-4 text-sm">
         <p className="font-medium">
-          {pending.file.name} vs what you already have in {year}:
+          {pending.file.name} vs what you already have in {pending.diff.year}:
         </p>
         <ul className="text-muted-foreground">
           <li>{summary.changed} values change</li>
@@ -159,7 +168,12 @@ export function ImportWorkbook({
           )}
           <Button
             disabled={importing.isPending}
-            onClick={() => importing.mutate(pending.file)}>
+            onClick={() =>
+              importing.mutate({
+                file: pending.file,
+                year: pending.diff.year,
+              })
+            }>
             {importing.isPending ? "Importing..." : "Import"}
           </Button>
           <Button
