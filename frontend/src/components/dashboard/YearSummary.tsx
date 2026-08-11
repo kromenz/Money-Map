@@ -7,14 +7,11 @@ import type { YearMetrics } from "@/lib/budget-metrics";
  * Os cinco numeros do ano em linha, nao em cartoes empilhados: as duas linhas
  * tracejadas do CashflowChart ja dizem as medias, e cartoes grandes a repetir
  * totais ao lado disso roubavam a largura de que o grafico precisa.
+ *
+ * Sem o ano escrito: as setas do cabecalho ja dizem qual e o ano que se esta a
+ * ver, e repeti-lo aqui era so ruido.
  */
-export function YearSummary({
-  year,
-  metrics,
-}: {
-  year: number;
-  metrics: YearMetrics;
-}) {
+export function YearSummary({ metrics }: { metrics: YearMetrics }) {
   const items: { label: string; value: string }[] = [
     { label: "In", value: formatEur(metrics.income) },
     { label: "Out", value: formatEur(metrics.expenses) },
@@ -25,7 +22,6 @@ export function YearSummary({
 
   return (
     <div className="flex flex-wrap items-baseline justify-center gap-x-8 gap-y-3">
-      <span className="text-sm font-medium text-muted-foreground">{year}</span>
       {items.map((i) => (
         <div key={i.label} className="flex flex-col">
           <span className="text-xs uppercase tracking-wide text-muted-foreground">

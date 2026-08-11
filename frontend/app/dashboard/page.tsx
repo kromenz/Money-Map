@@ -188,7 +188,7 @@ export default function DashboardPage() {
       <div className="space-y-6">
         {/* A faixa do ano: o resumo centrado com a largura toda, e o grafico
             por baixo. Importar vive na pasta e no botao do cabecalho. */}
-        <YearSummary year={year} metrics={metrics} />
+        <YearSummary metrics={metrics} />
 
         <CashflowChart
           months={metrics.months}
