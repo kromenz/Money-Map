@@ -60,6 +60,16 @@ export default function DashboardPage() {
   // importar um ficheiro) mantem os dados antigos em cache, por isso o erro
   // tem de ganhar ao grelha em vez de as duas aparecerem empilhadas.
   function renderContent() {
+    // Elemento de largar reutilizado nos tres ramos que o precisam.
+    const dropZone = (
+      <ImportWorkbook
+        year={year}
+        variant="square"
+        onImportStart={() => setReport(null)}
+        onImported={handleImported}
+      />
+    );
+
     if (isPending) return <DashboardSkeleton />;
 
     // Uma falha no carregamento nao pode deixar o utilizador sem forma de
@@ -67,12 +77,7 @@ export default function DashboardPage() {
     if (isError) {
       return (
         <div className="flex flex-wrap items-start gap-6">
-          <ImportWorkbook
-            year={year}
-            variant="square"
-            onImportStart={() => setReport(null)}
-            onImported={handleImported}
-          />
+          {dropZone}
           <p className="text-destructive">
             Could not load the dashboard: {error.message}
           </p>
@@ -100,12 +105,7 @@ export default function DashboardPage() {
     if (activeMonth === null || !metrics || !detail) {
       return (
         <div className="flex flex-wrap items-start gap-6">
-          <ImportWorkbook
-            year={year}
-            variant="square"
-            onImportStart={() => setReport(null)}
-            onImported={handleImported}
-          />
+          {dropZone}
           <div className="min-w-0 flex-1 rounded-lg border p-8 text-center">
             <p className="font-medium">No movement in {year}</p>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -121,12 +121,7 @@ export default function DashboardPage() {
         {/* A faixa do ano: quadrado de largar a esquerda, resumo ao lado, e o
             grafico com a largura toda por baixo. */}
         <div className="flex flex-wrap items-start gap-6">
-          <ImportWorkbook
-            year={year}
-            variant="square"
-            onImportStart={() => setReport(null)}
-            onImported={handleImported}
-          />
+          {dropZone}
           <div className="min-w-0 flex-1">
             <YearSummary year={year} metrics={metrics} />
           </div>
