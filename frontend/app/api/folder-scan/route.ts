@@ -126,12 +126,20 @@ export async function POST(request: Request) {
 
   if (!inFlight || force) {
     const gen = ++generation;
-    inFlight = scan(folder, request.headers.get("cookie") ?? "").then((result) => {
-      // So o varrimento mais recente pode escrever no cache: um varrimento
-      // antigo a acabar depois de um forcado apagava dados mais frescos.
-      if (gen === generation) cached = result;
-      return result;
-    });
+    // Encadear no varrimento anterior em vez de lancar por cima dele: um
+    // forcado a chegar enquanto outro ainda corre nao pode ter as duas
+    // importacoes do mesmo ano em transacoes sobrepostas (duplicava linhas).
+    // O generation counter continua a decidir quem escreve na cache.
+    const previous = inFlight;
+    inFlight = (previous ?? Promise.resolve())
+      .catch(() => undefined)
+      .then(() => scan(folder, request.headers.get("cookie") ?? ""))
+      .then((result) => {
+        // So o varrimento mais recente pode escrever no cache: um varrimento
+        // antigo a acabar depois de um forcado apagava dados mais frescos.
+        if (gen === generation) cached = result;
+        return result;
+      });
   }
   const current = inFlight;
 
