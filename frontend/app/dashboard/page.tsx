@@ -62,11 +62,21 @@ export default function DashboardPage() {
   function renderContent() {
     if (isPending) return <DashboardSkeleton />;
 
+    // Uma falha no carregamento nao pode deixar o utilizador sem forma de
+    // importar -- a zona fica ao lado do erro, tal como no caminho feliz.
     if (isError) {
       return (
-        <p className="text-destructive">
-          Could not load the dashboard: {error.message}
-        </p>
+        <div className="flex flex-wrap items-start gap-6">
+          <ImportWorkbook
+            year={year}
+            variant="square"
+            onImportStart={() => setReport(null)}
+            onImported={handleImported}
+          />
+          <p className="text-destructive">
+            Could not load the dashboard: {error.message}
+          </p>
+        </div>
       );
     }
 
@@ -89,11 +99,19 @@ export default function DashboardPage() {
     // a "Full table" logo abaixo mostra a estrutura toda.
     if (activeMonth === null || !metrics || !detail) {
       return (
-        <div className="rounded-lg border p-8 text-center">
-          <p className="font-medium">No movement in {year}</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            The categories are imported, but no month has any amounts yet.
-          </p>
+        <div className="flex flex-wrap items-start gap-6">
+          <ImportWorkbook
+            year={year}
+            variant="square"
+            onImportStart={() => setReport(null)}
+            onImported={handleImported}
+          />
+          <div className="min-w-0 flex-1 rounded-lg border p-8 text-center">
+            <p className="font-medium">No movement in {year}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              The categories are imported, but no month has any amounts yet.
+            </p>
+          </div>
         </div>
       );
     }
