@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Money Map">
+  <style>
+    /* O separador do browser tem tema proprio, independente do da app, por isso
+       a marca adapta-se sozinha em vez de assumir fundo claro. Os valores sao os
+       mesmos dois tons de --primary que o globals.css usa nos dois temas. */
+    .mark { stroke: #4f2980; }
+    .now { fill: #0aa06a; }
+    @media (prefers-color-scheme: dark) {
+      .mark { stroke: #b58bf9; }
+      .now { fill: #34d399; }
+    }
+  </style>
+  <path
+    class="mark"
+    d="M4.5 26.5 L11 7.5 L16 18.5 L21 7.5 L27.5 26.5"
+    fill="none"
+    stroke-width="3.6"
+    stroke-linecap="round"
+    stroke-linejoin="round" />
+  <circle class="now" cx="21" cy="7.5" r="3.6" />
+</svg>

@@ -6,9 +6,10 @@ import { cn } from "@/lib/utils";
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
+// Sem campo icons: o Next apanha sozinho o app/icon.svg e o app/apple-icon.tsx
+// pela convencao de ficheiros. Declara-los aqui sobrepunha-se a ela.
 export const metadata: Metadata = {
   title: "Money Map",
-  icons: { icon: "/logo.png" },
 };
 
 export default function RootLayout({
