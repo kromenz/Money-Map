@@ -75,6 +75,7 @@ export default function DashboardPage() {
 
       if (result.status === "not-configured") {
         setFolderConfigured(false);
+        setFolderFailures([]);
         return;
       }
       setFolderConfigured(true);
@@ -92,9 +93,16 @@ export default function DashboardPage() {
         await queryClient.invalidateQueries({ queryKey: ["budget-grid"] });
         await queryClient.invalidateQueries({ queryKey: ["budget-years"] });
       }
-    } catch {
-      // O varrimento e um extra. Se o route handler falhar, o dashboard
-      // continua a servir com o arrastar-e-largar.
+    } catch (err) {
+      // O varrimento e um extra: o dashboard continua a servir com o
+      // arrastar-e-largar mesmo que o route handler falhe. Mas a falha nao
+      // pode ficar muda -- fica no log e na faixa, para nao parecer que a
+      // pasta nunca esteve configurada.
+      console.error("folder scan failed", err);
+      setFolderConfigured(true);
+      setFolderFailures([
+        { file: "folder scan", year: null, reason: "the scan itself failed to run" },
+      ]);
     } finally {
       setScanning(false);
     }
