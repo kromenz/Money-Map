@@ -126,7 +126,9 @@ export default function DashboardPage() {
   // importar um ficheiro) mantem os dados antigos em cache, por isso o erro
   // tem de ganhar ao grelha em vez de as duas aparecerem empilhadas.
   function renderContent() {
-    // Elemento de largar reutilizado nos tres ramos que o precisam.
+    // Elemento de largar reutilizado nos dois ramos de recuperacao. Fora do
+    // caminho feliz: com a pasta a carregar sozinha, um quadrado permanente ao
+    // lado do resumo era so ruido.
     const dropZone = (
       <ImportWorkbook
         year={year}
@@ -184,14 +186,9 @@ export default function DashboardPage() {
 
     return (
       <div className="space-y-6">
-        {/* A faixa do ano: quadrado de largar a esquerda, resumo ao lado, e o
-            grafico com a largura toda por baixo. */}
-        <div className="flex flex-wrap items-start gap-6">
-          {dropZone}
-          <div className="min-w-0 flex-1">
-            <YearSummary year={year} metrics={metrics} />
-          </div>
-        </div>
+        {/* A faixa do ano: o resumo centrado com a largura toda, e o grafico
+            por baixo. Importar vive na pasta e no botao do cabecalho. */}
+        <YearSummary year={year} metrics={metrics} />
 
         <CashflowChart
           months={metrics.months}

@@ -24,7 +24,7 @@ export function YearSummary({
   ];
 
   return (
-    <div className="flex flex-wrap items-baseline gap-x-8 gap-y-3">
+    <div className="flex flex-wrap items-baseline justify-center gap-x-8 gap-y-3">
       <span className="text-sm font-medium text-muted-foreground">{year}</span>
       {items.map((i) => (
         <div key={i.label} className="flex flex-col">
