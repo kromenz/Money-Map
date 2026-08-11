@@ -43,6 +43,20 @@ function sum(values: number[]): number {
 }
 
 /**
+ * Um mes conta como activo se tiver receita, despesa ou poupanca diferente
+ * de zero. Um mes sem movimento nenhum nao e um mes de zero euros: e um mes
+ * que ainda nao aconteceu. Usada tanto por lastActiveMonth como pelas medias,
+ * para as duas nocoes de "mes activo" nunca poderem divergir.
+ */
+function isActiveMonth(m: {
+  income: number;
+  expenses: number;
+  savings: number;
+}): boolean {
+  return m.income !== 0 || m.expenses !== 0 || m.savings !== 0;
+}
+
+/**
  * A variacao relativa de um valor face a media, ou null quando a media e zero.
  *
  * Contra zero nao existe variacao percentual, e devolver 0 ou Infinity mentia
@@ -71,16 +85,13 @@ export function yearMetrics(data: GridResponse): YearMetrics {
   }));
 
   let lastActiveMonth: number | null = null;
-  for (let i = 0; i < 12; i++) {
-    if (inc[i] !== 0 || exp[i] !== 0 || sav[i] !== 0) lastActiveMonth = i;
+  for (const m of months) {
+    if (isActiveMonth(m)) lastActiveMonth = m.month;
   }
 
-  // O mesmo predicado do lastActiveMonth acima. Um mes sem movimento nenhum nao
-  // e um mes de zero euros: e um mes que ainda nao aconteceu, e entra-lo na
-  // media punha todos os meses reais acima do normal.
-  const active = months.filter(
-    (m) => m.income !== 0 || m.expenses !== 0 || m.savings !== 0
-  );
+  // Entrar os meses inactivos na media punha todos os meses reais acima do
+  // normal, por isso usa-se o mesmo predicado do lastActiveMonth acima.
+  const active = months.filter(isActiveMonth);
   const mean = (pick: (m: MonthPoint) => number) =>
     active.length === 0 ? 0 : sum(active.map(pick)) / active.length;
 
