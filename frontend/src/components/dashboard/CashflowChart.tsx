@@ -3,6 +3,8 @@
 import { Bar, BarChart, Cell, ReferenceLine, XAxis, YAxis } from "recharts";
 import {
   ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
   ChartTooltip,
   ChartTooltipContent,
   type ChartConfig,
@@ -33,10 +35,11 @@ const formatter = eurTooltipFormatter(config, Math.abs);
 
 /**
  * No tema escuro o par receita/despesa fica em CVD ΔE 7.8, dentro da banda 6-8
- * que so e legal com codificacao secundaria. O reforco sao os rotulos directos
- * do mes seleccionado, a folga entre segmentos empilhados e a legenda. Se
- * alguem tirar qualquer um deles, a paleta deixa de estar conforme sem que nada
- * falhe visivelmente.
+ * que so e legal com codificacao secundaria. O reforco aqui e a posicao face a
+ * linha do zero -- receita sempre acima, despesa e poupanca sempre abaixo -- e
+ * a legenda por baixo do grafico, que nomeia as tres series sem exigir hover.
+ * Se qualquer um dos dois desaparecer, a paleta deixa de estar conforme sem
+ * que nada falhe visivelmente.
  */
 export function CashflowChart({
   months,
@@ -49,19 +52,6 @@ export function CashflowChart({
   selectedMonth: number;
   onSelectMonth: (month: number) => void;
 }) {
-  // Despesa e poupanca vao para baixo do zero: as duas sao dinheiro que sai, e
-  // empilha-las torna o total de saida comparavel de relance com a receita
-  // acima. A folga entre os dois lados e o que sobrou nesse mes.
-  const data = months.map((m) => ({
-    month: m.month,
-    label: MONTH_LABELS[m.month],
-    income: m.income,
-    expensesDown: -m.expenses,
-    savingsDown: -m.savings,
-    hitUp: 0,
-    hitDown: 0,
-  }));
-
   // Barras de clique com a altura maxima do dominio, para os 12 meses serem
   // clicaveis mesmo a zeros: o recharts descarta rectangulos de dimensao zero
   // antes de desenhar (cartesian/Bar.js:663) e o onClick vive no <Cell> desse
@@ -72,10 +62,19 @@ export function CashflowChart({
     1,
     ...months.map((m) => Math.max(m.income, m.expenses + m.savings))
   );
-  for (const d of data) {
-    d.hitUp = reach;
-    d.hitDown = -reach;
-  }
+
+  // Despesa e poupanca vao para baixo do zero: as duas sao dinheiro que sai, e
+  // empilha-las torna o total de saida comparavel de relance com a receita
+  // acima. A folga entre os dois lados e o que sobrou nesse mes.
+  const data = months.map((m) => ({
+    month: m.month,
+    label: MONTH_LABELS[m.month],
+    income: m.income,
+    expensesDown: -m.expenses,
+    savingsDown: -m.savings,
+    hitUp: reach,
+    hitDown: -reach,
+  }));
 
   const cells = data.map((d) => (
     <Cell
@@ -108,11 +107,12 @@ export function CashflowChart({
 
         {/* Primeiro no DOM, logo atras das series. tooltipType="none" mantem-nas
             fora do tooltip (Bar.js:85 copia-o para o payload, ui/chart.tsx:199
-            filtra por ele). */}
-        <Bar xAxisId={HIT_AXIS} dataKey="hitUp" stackId="hit" fill="transparent" tooltipType="none" isAnimationActive={false}>
+            filtra por ele), e legendType="none" fora da legenda pelo mesmo
+            mecanismo. */}
+        <Bar xAxisId={HIT_AXIS} dataKey="hitUp" stackId="hit" fill="transparent" tooltipType="none" legendType="none" isAnimationActive={false}>
           {cells}
         </Bar>
-        <Bar xAxisId={HIT_AXIS} dataKey="hitDown" stackId="hit" fill="transparent" tooltipType="none" isAnimationActive={false}>
+        <Bar xAxisId={HIT_AXIS} dataKey="hitDown" stackId="hit" fill="transparent" tooltipType="none" legendType="none" isAnimationActive={false}>
           {cells}
         </Bar>
 
@@ -141,6 +141,10 @@ export function CashflowChart({
         <Bar dataKey="savingsDown" stackId="flow" fill="var(--color-savingsDown)" radius={[0, 0, 3, 3]}>
           {cells}
         </Bar>
+
+        {/* Por baixo do grafico, nao ao lado -- ao lado roubava largura aos
+            meses e o grafico ja e curto (h-64). */}
+        <ChartLegend content={<ChartLegendContent />} />
       </BarChart>
     </ChartContainer>
   );
