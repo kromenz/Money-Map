@@ -14,6 +14,7 @@ import { MonthPanel } from "../../src/components/dashboard/MonthPanel";
 import { DashboardSkeleton } from "../../src/components/dashboard/DashboardSkeleton";
 import { fetchGrid } from "../../src/services/budget.service";
 import { yearMetrics, monthDetail } from "../../src/lib/budget-metrics";
+import { categoryDeltas } from "../../src/lib/category-deltas";
 import { MONTH_LABELS } from "../../src/lib/format";
 import type { ImportResult } from "../../src/types/budget";
 
@@ -39,6 +40,10 @@ export default function DashboardPage() {
   const activeMonth = selectedMonth ?? metrics?.lastActiveMonth ?? null;
   const detail = useMemo(
     () => (data && activeMonth !== null ? monthDetail(data, activeMonth) : null),
+    [data, activeMonth]
+  );
+  const deltas = useMemo(
+    () => (data && activeMonth !== null ? categoryDeltas(data, activeMonth) : []),
     [data, activeMonth]
   );
 
@@ -134,7 +139,12 @@ export default function DashboardPage() {
           onSelectMonth={setSelectedMonth}
         />
 
-        <MonthPanel detail={detail} monthLabel={MONTH_LABELS[detail.month]} />
+        <MonthPanel
+          detail={detail}
+          monthLabel={MONTH_LABELS[detail.month]}
+          averages={metrics.averages}
+          deltas={deltas}
+        />
       </div>
     );
   }
