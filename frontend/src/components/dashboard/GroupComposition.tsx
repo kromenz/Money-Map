@@ -55,7 +55,7 @@ export function GroupComposition({
       <div className="flex h-7 w-full gap-[2px] overflow-hidden rounded-md">
         {positive.map((g, i) => (
           <div
-            key={g.group}
+            key={i}
             title={`${g.group}: ${formatEur(g.amount)}`}
             style={{
               width: `${(g.amount / total) * 100}%`,
@@ -68,7 +68,9 @@ export function GroupComposition({
       {/* Legenda sempre presente: a identidade nunca pode depender so da cor. */}
       <ul className="flex flex-wrap gap-x-4 gap-y-1">
         {positive.map((g, i) => (
-          <li key={g.group} className="flex items-center gap-1.5 text-xs">
+          // Indice na chave, nao o nome: um grupo importado chamado "Other"
+          // colidia com o rotulo sintetico do tecto de cinco grupos.
+          <li key={i} className="flex items-center gap-1.5 text-xs">
             <span
               className="size-2.5 shrink-0 rounded-[3px]"
               style={{ background: SLOTS[i] }}
