@@ -67,6 +67,62 @@ function Stop-Leftovers {
     throw "Port 3000 is still busy after stopping the leftover process."
 }
 
+$DockerDesktopExe = "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+
+# docker info e a unica pergunta honesta: o processo do Docker Desktop pode estar
+# em memoria muito antes de o motor aceitar comandos.
+function Test-DockerEngine {
+    # ErrorActionPreference local em Continue: no PowerShell 5.1, redirigir a
+    # stderr de um executavel nativo com Stop torna cada linha num erro
+    # terminante -- e o docker info escreve na stderr precisamente quando o
+    # motor esta em baixo, ou seja no caso que esta funcao existe para detectar.
+    $old = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        docker info 2>$null | Out-Null
+        return ($LASTEXITCODE -eq 0)
+    }
+    finally {
+        $ErrorActionPreference = $old
+    }
+}
+
+function Start-DockerEngine {
+    Write-Step "Checking the Docker engine"
+
+    if (Test-DockerEngine) {
+        Write-Host "    already running"
+        return
+    }
+
+    if (-not (Test-Path $DockerDesktopExe)) {
+        throw "Docker Desktop was not found at '$DockerDesktopExe'. Start it yourself and run the launcher again."
+    }
+
+    Write-Host "    starting Docker Desktop (this can take a minute)"
+    Start-Process -FilePath $DockerDesktopExe | Out-Null
+
+    for ($i = 0; $i -lt 40; $i++) {
+        Start-Sleep -Seconds 3
+        if (Test-DockerEngine) {
+            Write-Host "    engine is up"
+            return
+        }
+        Write-Host "    still waiting..."
+    }
+    throw "The Docker engine did not come up within two minutes."
+}
+
+function Start-Containers {
+    Write-Step "Starting the database and the API"
+    # O ErrorActionPreference nao apanha o codigo de saida de um executavel; so
+    # o $LASTEXITCODE diz se o compose correu bem.
+    docker compose --project-directory $RepoRoot up -d
+    if ($LASTEXITCODE -ne 0) {
+        throw "docker compose up failed. Scroll up for the output above."
+    }
+}
+
 function Stop-Everything {
     # Preenchido na Task 5.
 }
@@ -89,6 +145,8 @@ try {
     Write-Host "MoneyMap launcher" -ForegroundColor Green
     Assert-Tools
     Stop-Leftovers
+    Start-DockerEngine
+    Start-Containers
     Show-Panel "Nothing is running yet -- the launcher is still being built."
 }
 catch {
