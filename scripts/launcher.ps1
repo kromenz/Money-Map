@@ -158,8 +158,68 @@ function Wait-Api {
     throw "The API did not answer on http://localhost:5000 within three minutes. Try 'docker compose logs api' to see why."
 }
 
+function Start-Frontend {
+    Write-Step "Starting the frontend"
+
+    $logDir = Join-Path $RepoRoot "logs"
+    if (-not (Test-Path $logDir)) {
+        New-Item -ItemType Directory -Path $logDir | Out-Null
+    }
+    $log = Join-Path $logDir "frontend.log"
+
+    # npm.cmd e nao npm: o Start-Process chama o Windows directamente e nao
+    # resolve o npm.ps1 que o nvm4w poe no PATH.
+    $proc = Start-Process -FilePath "npm.cmd" -ArgumentList "start" `
+        -WorkingDirectory (Join-Path $RepoRoot "frontend") `
+        -RedirectStandardOutput $log `
+        -RedirectStandardError (Join-Path $logDir "frontend.err.log") `
+        -NoNewWindow -PassThru
+    $script:FrontendPid = $proc.Id
+
+    for ($i = 0; $i -lt 30; $i++) {
+        Start-Sleep -Seconds 2
+        try {
+            Invoke-WebRequest -Uri "http://localhost:3000/" -UseBasicParsing -TimeoutSec 5 | Out-Null
+            Write-Host "    frontend is answering"
+            return
+        }
+        catch {
+            # Ainda a arrancar.
+        }
+    }
+    throw "The frontend did not answer on http://localhost:3000. See logs\frontend.log."
+}
+
 function Stop-Everything {
-    # Preenchido na Task 5.
+    Write-Step "Shutting down"
+
+    # Isto corre dentro do finally. Um erro aqui substituiria a falha original
+    # por outra, e o utilizador deixaria de saber o que correu mal de verdade --
+    # por isso a paragem queixa-se mas nunca lanca.
+    $old = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        if ($script:FrontendPid) {
+            Write-Host "    stopping the frontend"
+            # O npm.cmd cria um node filho; matar so o pai deixava o 3000
+            # ocupado. O /T leva a arvore toda.
+            taskkill /PID $script:FrontendPid /T /F 2>$null | Out-Null
+            $script:FrontendPid = $null
+        }
+
+        Write-Host "    stopping the containers"
+        docker compose --project-directory $RepoRoot stop
+    }
+    catch {
+        Write-Host "    shutdown had a problem: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+    finally {
+        $ErrorActionPreference = $old
+    }
+
+    Write-Host ""
+    Write-Host "MoneyMap is off." -ForegroundColor Green
+    Start-Sleep -Seconds 2
 }
 
 # Nao desliga nada de proposito: a paragem vive num sitio so, o finally la em
@@ -184,7 +244,12 @@ try {
     Start-Containers
     Build-Frontend
     Wait-Api
-    Show-Panel "Nothing is running yet -- the launcher is still being built."
+    Start-Frontend
+
+    # So depois de o 3000 responder: abrir antes mostrava um erro de ligacao.
+    Start-Process "http://localhost:3000"
+
+    Show-Panel "MoneyMap is running at http://localhost:3000"
 }
 catch {
     Write-Host ""
