@@ -123,6 +123,41 @@ function Start-Containers {
     }
 }
 
+function Build-Frontend {
+    Write-Step "Building the frontend"
+    Push-Location (Join-Path $RepoRoot "frontend")
+    try {
+        npm run build
+        if ($LASTEXITCODE -ne 0) {
+            throw "The frontend build failed. Scroll up for the errors above."
+        }
+    }
+    finally {
+        Pop-Location
+    }
+}
+
+# O docker compose up -d volta muito antes de a API existir: o run.sh ainda corre
+# o prisma generate, o db push e o seed antes de o Express ouvir. Por isso
+# espera-se por uma resposta de verdade, nao por "o contentor arrancou".
+function Wait-Api {
+    Write-Step "Waiting for the API"
+    for ($i = 0; $i -lt 90; $i++) {
+        try {
+            $res = Invoke-WebRequest -Uri "http://localhost:5000/" -UseBasicParsing -TimeoutSec 5
+            if ($res.StatusCode -eq 200) {
+                Write-Host "    API is answering"
+                return
+            }
+        }
+        catch {
+            # Ainda nao subiu. Nao ha nada a fazer senao voltar a tentar.
+        }
+        Start-Sleep -Seconds 2
+    }
+    throw "The API did not answer on http://localhost:5000 within three minutes. Try 'docker compose logs api' to see why."
+}
+
 function Stop-Everything {
     # Preenchido na Task 5.
 }
@@ -147,6 +182,8 @@ try {
     Stop-Leftovers
     Start-DockerEngine
     Start-Containers
+    Build-Frontend
+    Wait-Api
     Show-Panel "Nothing is running yet -- the launcher is still being built."
 }
 catch {
