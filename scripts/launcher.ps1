@@ -190,6 +190,9 @@ function Start-Frontend {
     throw "The frontend did not answer on http://localhost:3000. See logs\frontend.log."
 }
 
+# Chamada num sitio so -- o finally la em baixo. O Q do painel limita-se a
+# retornar, e a paragem acontece a seguir. Assim a saida normal, o Ctrl+C e uma
+# falha a meio percorrem o mesmo caminho e isto nunca corre duas vezes.
 function Stop-Everything {
     Write-Step "Shutting down"
 
