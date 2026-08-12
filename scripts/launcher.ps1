@@ -28,6 +28,37 @@ function Assert-Tools {
     Write-Host "    docker and npm found"
 }
 
+# Duas janelas do lancador ao mesmo tempo davam um estrago silencioso: a segunda
+# mata o frontend da primeira, e depois o Q da primeira faz docker compose stop
+# por baixo do frontend da segunda -- a pagina abre e todos os pedidos falham.
+function Assert-SingleInstance {
+    Write-Step "Checking for another launcher"
+
+    $logDir = Join-Path $RepoRoot "logs"
+    if (-not (Test-Path $logDir)) {
+        New-Item -ItemType Directory -Path $logDir | Out-Null
+    }
+
+    if (Test-Path $LockFile) {
+        $other = (Get-Content $LockFile -ErrorAction SilentlyContinue | Select-Object -First 1)
+        $proc = $null
+        # Um PID sozinho nao chega: o Windows reutiliza numeros, e uma fechadura
+        # deixada para tras por um fecho no X apontaria para um processo
+        # qualquer. So conta se ainda for um PowerShell.
+        if ($other -and $other -match "^\d+$") {
+            $proc = Get-Process -Id ([int]$other) -ErrorAction SilentlyContinue
+        }
+        if ($proc -and $proc.ProcessName -like "powershell*") {
+            throw "MoneyMap is already running in another launcher window. Use that window, or press Q there and try again."
+        }
+        Write-Host "    clearing a stale lock"
+        Remove-Item $LockFile -Force -ErrorAction SilentlyContinue
+    }
+
+    Set-Content -Path $LockFile -Value $PID -Encoding ascii
+    Write-Host "    this is the only launcher running"
+}
+
 # Um next start deixado vivo de uma sessao anterior e o unico caso em que o
 # build seguinte substitui o .next por baixo de um servidor a correr e parte a
 # app com erros que parecem de codigo. Por isso isto vem antes de tudo.
@@ -52,7 +83,7 @@ function Stop-Leftovers {
         }
 
         Write-Host "    stopping leftover node (PID $id)"
-        Stop-Process -Id $id -Force
+        Stop-Process -Id $id -Force -ErrorAction SilentlyContinue
     }
 
     # Libertar o porto nao e instantaneo depois do Stop-Process.
@@ -68,6 +99,7 @@ function Stop-Leftovers {
 }
 
 $DockerDesktopExe = "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+$LockFile = Join-Path $RepoRoot "logs\launcher.lock"
 
 # docker info e a unica pergunta honesta: o processo do Docker Desktop pode estar
 # em memoria muito antes de o motor aceitar comandos.
@@ -178,6 +210,11 @@ function Start-Frontend {
 
     for ($i = 0; $i -lt 30; $i++) {
         Start-Sleep -Seconds 2
+        # Se o processo ja morreu nao ha nada por que esperar, e mais 58
+        # segundos de silencio nao acrescentam informacao nenhuma.
+        if ($proc.HasExited) {
+            throw "The frontend stopped right after starting. See logs\frontend.err.log."
+        }
         try {
             Invoke-WebRequest -Uri "http://localhost:3000/" -UseBasicParsing -TimeoutSec 5 | Out-Null
             Write-Host "    frontend is answering"
@@ -187,12 +224,14 @@ function Start-Frontend {
             # Ainda a arrancar.
         }
     }
-    throw "The frontend did not answer on http://localhost:3000. See logs\frontend.log."
+    throw "The frontend did not answer on http://localhost:3000. See logs\frontend.err.log and logs\frontend.log."
 }
 
 # Chamada num sitio so -- o finally la em baixo. O Q do painel limita-se a
-# retornar, e a paragem acontece a seguir. Assim a saida normal, o Ctrl+C e uma
-# falha a meio percorrem o mesmo caminho e isto nunca corre duas vezes.
+# retornar, e a paragem acontece a seguir; uma falha a meio sai pelo mesmo
+# caminho. O Ctrl+C nao: bloqueado no ReadKey, e a consola que o trata e o
+# finally nao chega a correr, tal como no X. Quem cobre esses dois e a limpeza
+# no arranque, nao este codigo.
 function Stop-Everything {
     Write-Step "Shutting down"
 
@@ -210,8 +249,22 @@ function Stop-Everything {
             $script:FrontendPid = $null
         }
 
-        Write-Host "    stopping the containers"
-        docker compose --project-directory $RepoRoot stop
+        # Se falhamos por nao haver docker, chamar o docker aqui so acrescenta
+        # ruido amarelo por cima da mensagem vermelha que interessa.
+        if (Get-Command docker -ErrorAction SilentlyContinue) {
+            Write-Host "    stopping the containers"
+            docker compose --project-directory $RepoRoot stop
+        }
+
+        # So se apaga a fechadura se for a nossa. Quando saimos por ja haver
+        # outro lancador, a fechadura e dele -- apagar-lha era o mesmo que nao
+        # ter guarda nenhuma.
+        if (Test-Path $LockFile) {
+            $owner = (Get-Content $LockFile -ErrorAction SilentlyContinue | Select-Object -First 1)
+            if ($owner -eq "$PID") {
+                Remove-Item $LockFile -Force -ErrorAction SilentlyContinue
+            }
+        }
     }
     catch {
         Write-Host "    shutdown had a problem: $($_.Exception.Message)" -ForegroundColor Yellow
@@ -226,7 +279,8 @@ function Stop-Everything {
 }
 
 # Nao desliga nada de proposito: a paragem vive num sitio so, o finally la em
-# baixo. Assim o Q, o Ctrl+C e uma falha a meio saem todos pelo mesmo caminho.
+# baixo. So o Q sai por aqui -- o X e o Ctrl+C matam a janela sem passar pelo
+# finally, e e o arranque seguinte que limpa o que ficou.
 function Show-Panel {
     param([string]$Message)
     Write-Host ""
@@ -242,6 +296,7 @@ function Show-Panel {
 try {
     Write-Host "MoneyMap launcher" -ForegroundColor Green
     Assert-Tools
+    Assert-SingleInstance
     Stop-Leftovers
     Start-DockerEngine
     Start-Containers
