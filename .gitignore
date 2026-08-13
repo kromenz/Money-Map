@@ -99,3 +99,9 @@ cache/
 
 docs/superpowers
 .superpowers/
+
+# Lancador: a fonte e o Money-Map.cmd mais o scripts/launcher.ps1, ambos
+# versionados. O .exe e o atalho sao artefactos gerados a partir deles -- ficam
+# de fora para nao haver duas versoes da mesma coisa, uma legivel e outra nao.
+*.exe
+*.lnk
