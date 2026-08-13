@@ -66,8 +66,10 @@ export function yearGroups(
       group: r.group === "" ? UNGROUPED : r.group,
       amount: r.months.reduce((s, v) => s + Number(v), 0),
     }))
-    // Uma categoria a zeros no ano inteiro nao e composicao nenhuma.
-    .filter((r) => r.amount !== 0);
+    // Meio centimo, nao zero exacto. Aqui a amount e a soma de doze floats: uma
+    // categoria toda reembolsada da -2.8e-14 e nao 0, e passava o teste !== 0
+    // que serve no monthDetail, onde a amount e um numero so.
+    .filter((r) => Math.abs(r.amount) >= 0.005);
 
   return groupExpenses(rows);
 }

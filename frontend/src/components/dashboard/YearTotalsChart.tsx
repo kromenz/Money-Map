@@ -1,6 +1,6 @@
 "use client";
 
-import { Bar, BarChart, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, ReferenceLine, XAxis, YAxis } from "recharts";
 import {
   ChartContainer,
   ChartLegend,
@@ -44,6 +44,10 @@ export function YearTotalsChart({ totals }: { totals: YearTotals[] }) {
         <XAxis dataKey="label" tickLine={false} axisLine={false} className="text-xs" />
         <YAxis hide />
         <ChartTooltip content={<ChartTooltipContent formatter={formatter} />} />
+
+        {/* Um ano de poupanca liquida negativa desenha para baixo, e sem esta
+            linha a barra ficava pendurada a partir do nada. */}
+        <ReferenceLine y={0} stroke="var(--border)" />
 
         <Bar dataKey="income" fill="var(--color-income)" radius={[3, 3, 0, 0]} />
         <Bar dataKey="expenses" fill="var(--color-expenses)" radius={[3, 3, 0, 0]} />

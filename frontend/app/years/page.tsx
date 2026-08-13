@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import useRequireAuth from "../../src/hooks/useRequireAuth";
 import { ThemeToggle } from "../../src/components/ThemeToggle";
-import { DashboardSkeleton } from "../../src/components/dashboard/DashboardSkeleton";
+import { Skeleton } from "../../src/components/ui/skeleton";
 import { YearTotalsChart } from "../../src/components/dashboard/YearTotalsChart";
 import { CumulativeChart } from "../../src/components/dashboard/CumulativeChart";
 import { fetchGrid, fetchYears } from "../../src/services/budget.service";
@@ -49,7 +49,10 @@ export default function YearsPage() {
     })),
   });
 
-  const loaded = grids.every((g) => g.data);
+  // O every de um array vazio e true. Sem o shown.length > 0, uma falha na
+  // lista de anos dava loaded=true e caia no ramo do "nada importado" -- a
+  // dizer que a base esta vazia quando o que houve foi um erro.
+  const loaded = shown.length > 0 && grids.every((g) => g.data);
   const failed = grids.some((g) => g.isError);
   // Predicado explicito: sem ele o tipo ficava (GridResponse | undefined)[] e as
   // funcoes abaixo nao aceitavam a lista.
@@ -69,11 +72,27 @@ export default function YearsPage() {
   const hidden = (years?.length ?? 0) - shown.length;
 
   function renderContent() {
-    if (yearsError || failed) {
-      return <p className="text-destructive">Could not load the years.</p>;
+    // O !loaded e o que interessa: com dados em cache vale mais mostrar os
+    // graficos que ja la estavam do que uma linha vermelha. Um refetch falhado
+    // nao e razao para apagar o que o utilizador esta a ler.
+    if (yearsError && !loaded) {
+      return (
+        <p className="text-destructive">Could not load the list of years.</p>
+      );
+    }
+    if (failed && !loaded) {
+      return <p className="text-destructive">Could not load one of the years.</p>;
     }
     if (yearsPending || (shown.length > 0 && !loaded)) {
-      return <DashboardSkeleton />;
+      // Duas faixas com a altura exacta dos graficos, em vez do esqueleto do
+      // dashboard: este ecra tem outra forma, e um esqueleto que nao coincide
+      // com o que carrega a seguir causa o reflow que ele existe para evitar.
+      return (
+        <div className="space-y-8">
+          <Skeleton className="h-64 w-full" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      );
     }
     if (shown.length === 0) {
       return (
@@ -101,6 +120,13 @@ export default function YearsPage() {
 
     return (
       <div className="space-y-8">
+        {/* Cortar em silencio leria-se como "e isto que existe". */}
+        {hidden > 0 && (
+          <p className="text-sm text-muted-foreground">
+            Showing the {MAX_YEARS} most recent years. {hidden} older{" "}
+            {hidden === 1 ? "year is" : "years are"} not shown.
+          </p>
+        )}
         <section className="space-y-3">
           <h2 className="text-sm font-medium text-muted-foreground">
             Year by year
@@ -129,14 +155,6 @@ export default function YearsPage() {
           <ThemeToggle />
         </div>
       </header>
-
-      {/* Cortar em silencio leria-se como "e isto que existe". */}
-      {hidden > 0 && (
-        <p className="text-sm text-muted-foreground">
-          Showing the {MAX_YEARS} most recent years. {hidden} older{" "}
-          {hidden === 1 ? "year is" : "years are"} not shown.
-        </p>
-      )}
 
       {renderContent()}
     </main>

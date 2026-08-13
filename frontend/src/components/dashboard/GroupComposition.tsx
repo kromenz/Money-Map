@@ -7,9 +7,11 @@ import { formatEur } from "@/lib/format";
 // exigem identificadores CSS validos. Com chaves fixas as cores continuam a
 // viver so no globals.css.
 //
-// Indexadas directamente, sem modulo: o monthDetail garante no maximo seis
-// entradas (cinco grupos mais Other), e ciclar a rampa daria ao setimo a cor do
-// primeiro.
+// Indexadas directamente, sem modulo: o groupExpenses (budget-metrics.ts)
+// garante no maximo seis entradas -- TOP_GROUPS grupos mais Other -- e ciclar a
+// rampa daria ao setimo a cor do primeiro. Estes seis slots e o TOP_GROUPS tem
+// de subir juntos: mexer so num deixa SLOTS[6] a undefined e um segmento
+// transparente.
 const SLOTS = [
   "var(--chart-1)",
   "var(--chart-2)",
