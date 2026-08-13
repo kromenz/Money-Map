@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import useRequireAuth from "../../src/hooks/useRequireAuth";
 import { BudgetGrid } from "../../src/components/BudgetGrid";
@@ -239,6 +240,11 @@ export default function DashboardPage() {
               {scanning ? "Reloading…" : "Reload from folder"}
             </button>
           )}
+          <Link
+            href="/years"
+            className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted">
+            Compare years
+          </Link>
           <YearPills
             year={year}
             onSelect={(y) => {
