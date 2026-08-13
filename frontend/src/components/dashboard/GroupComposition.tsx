@@ -1,7 +1,6 @@
 "use client";
 
 import { formatEur } from "@/lib/format";
-import type { MonthDetail } from "@/lib/budget-metrics";
 
 // Uma entrada por posicao da rampa, nao por grupo: os nomes dos grupos vem do
 // ficheiro importado e podem ter espacos, acentos ou "&", e as custom properties
@@ -30,8 +29,12 @@ const SLOTS = [
  */
 export function GroupComposition({
   byGroup,
+  emptyMessage,
 }: {
-  byGroup: MonthDetail["byGroup"];
+  byGroup: { group: string; amount: number }[];
+  // O componente nao sabe se esta a mostrar um mes ou um ano, e nao devia
+  // adivinhar: quem o usa e que sabe o que dizer quando nao ha nada.
+  emptyMessage: string;
 }) {
   // Reembolsos podem deixar um grupo com total liquido negativo (ver
   // budget-metrics.ts). Isso e correcto para os totais, mas um segmento de
@@ -43,7 +46,7 @@ export function GroupComposition({
   if (total === 0) {
     return (
       <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
-        No expenses this month
+        {emptyMessage}
       </div>
     );
   }

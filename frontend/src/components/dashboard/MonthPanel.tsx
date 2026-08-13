@@ -56,7 +56,10 @@ export function MonthPanel({
           <h3 className="mb-3 text-xs uppercase tracking-wide text-muted-foreground">
             Where it went
           </h3>
-          <GroupComposition byGroup={detail.byGroup} />
+          <GroupComposition
+            byGroup={detail.byGroup}
+            emptyMessage="No expenses this month"
+          />
         </div>
         <div className="rounded-lg border p-4">
           <h3 className="mb-3 text-xs uppercase tracking-wide text-muted-foreground">

@@ -11,6 +11,8 @@ import { YearPills } from "../../src/components/YearPills";
 import { YearSummary } from "../../src/components/dashboard/YearSummary";
 import { CashflowChart } from "../../src/components/dashboard/CashflowChart";
 import { MonthPanel } from "../../src/components/dashboard/MonthPanel";
+import { GroupComposition } from "../../src/components/dashboard/GroupComposition";
+import { yearGroups } from "../../src/lib/year-comparison";
 import { DashboardSkeleton } from "../../src/components/dashboard/DashboardSkeleton";
 import { FolderScanNotice } from "../../src/components/dashboard/FolderScanNotice";
 import { fetchGrid } from "../../src/services/budget.service";
@@ -58,6 +60,7 @@ export default function DashboardPage() {
     () => (data && activeMonth !== null ? categoryDeltas(data, activeMonth) : []),
     [data, activeMonth]
   );
+  const groups = useMemo(() => (data ? yearGroups(data) : []), [data]);
 
   // So depois de a grelha responder: esse pedido passa pelo interceptor que
   // renova o token, por isso a esta altura o cookie ja esta bom. Varrer antes
@@ -196,6 +199,16 @@ export default function DashboardPage() {
           selectedMonth={activeMonth}
           onSelectMonth={setSelectedMonth}
         />
+
+        <div className="rounded-lg border p-4">
+          <h3 className="mb-3 text-xs uppercase tracking-wide text-muted-foreground">
+            Where it went this year
+          </h3>
+          <GroupComposition
+            byGroup={groups}
+            emptyMessage="No expenses this year"
+          />
+        </div>
 
         <MonthPanel
           detail={detail}
