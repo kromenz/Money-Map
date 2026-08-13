@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GridResponse, GridRow, SectionTotal } from "../types/budget";
-import { deltaVsAverage, monthDetail, yearMetrics } from "./budget-metrics";
+import { deltaVsAverage, groupExpenses, monthDetail, yearMetrics } from "./budget-metrics";
 
 /** 12 meses em que apenas alguns tem valor. */
 function months(values: Record<number, number>): string[] {
@@ -398,5 +398,66 @@ describe("deltaVsAverage", () => {
     // O que sobra pode ter media negativa (ano em defice). Sobrar -50 quando a
     // media e -100 e MELHOR que a media, logo desvio positivo.
     expect(deltaVsAverage(-50, -100)).toBeCloseTo(0.5, 6);
+  });
+});
+
+describe("groupExpenses", () => {
+  it("soma as linhas do mesmo grupo", () => {
+    expect(
+      groupExpenses([
+        { group: "Home", amount: 100 },
+        { group: "Home", amount: 50 },
+        { group: "Car", amount: 30 },
+      ])
+    ).toEqual([
+      { group: "Home", amount: 150 },
+      { group: "Car", amount: 30 },
+    ]);
+  });
+
+  it("ordena por valor descendente", () => {
+    expect(
+      groupExpenses([
+        { group: "Small", amount: 10 },
+        { group: "Big", amount: 90 },
+      ]).map((g) => g.group)
+    ).toEqual(["Big", "Small"]);
+  });
+
+  it("corta nos cinco maiores e soma o resto em Other", () => {
+    const rows = [
+      { group: "A", amount: 60 },
+      { group: "B", amount: 50 },
+      { group: "C", amount: 40 },
+      { group: "D", amount: 30 },
+      { group: "E", amount: 20 },
+      { group: "F", amount: 7 },
+      { group: "G", amount: 3 },
+    ];
+    const out = groupExpenses(rows);
+    expect(out).toHaveLength(6);
+    expect(out[5]).toEqual({ group: "Other", amount: 10 });
+  });
+
+  it("nao inventa Other quando cabe tudo", () => {
+    const out = groupExpenses([
+      { group: "A", amount: 1 },
+      { group: "B", amount: 2 },
+    ]);
+    expect(out.map((g) => g.group)).not.toContain("Other");
+  });
+
+  it("mantem o total: cortar nao pode perder dinheiro", () => {
+    const rows = Array.from({ length: 9 }, (_, i) => ({
+      group: `G${i}`,
+      amount: (i + 1) * 10,
+    }));
+    const sum = (xs: { amount: number }[]) =>
+      xs.reduce((s, x) => s + x.amount, 0);
+    expect(sum(groupExpenses(rows))).toBe(sum(rows));
+  });
+
+  it("devolve lista vazia sem linhas", () => {
+    expect(groupExpenses([])).toEqual([]);
   });
 });

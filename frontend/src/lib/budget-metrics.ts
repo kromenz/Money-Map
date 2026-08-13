@@ -137,6 +137,31 @@ const TOP_N = 5;
 // exactamente seis segmentos.
 const TOP_GROUPS = 5;
 
+/**
+ * Recebe uma linha por CATEGORIA, soma-as por grupo e corta no tecto.
+ *
+ * O resto e SOMADO numa entrada "Other" e nao descartado: quem desenha a barra
+ * de composicao divide cada valor pelo total, e um total a que faltassem os
+ * grupos cortados fazia a barra mentir sobre a proporcao.
+ */
+export function groupExpenses(
+  rows: { group: string; amount: number }[]
+): { group: string; amount: number }[] {
+  const groups = new Map<string, number>();
+  for (const r of rows) groups.set(r.group, (groups.get(r.group) ?? 0) + r.amount);
+
+  const byGroup = Array.from(groups, ([group, amount]) => ({ group, amount })).sort(
+    (a, b) => b.amount - a.amount
+  );
+
+  const capped = byGroup.slice(0, TOP_GROUPS);
+  if (byGroup.length > TOP_GROUPS) {
+    const rest = byGroup.slice(TOP_GROUPS).reduce((s, g) => s + g.amount, 0);
+    capped.push({ group: "Other", amount: rest });
+  }
+  return capped;
+}
+
 export function monthDetail(
   data: GridResponse,
   monthIndex: number
@@ -163,22 +188,7 @@ export function monthDetail(
     .filter((r) => r.amount !== 0)
     .sort((a, b) => b.amount - a.amount);
 
-  const groups = new Map<string, number>();
-  for (const r of spent) groups.set(r.group, (groups.get(r.group) ?? 0) + r.amount);
-
-  const byGroup = Array.from(groups, ([group, amount]) => ({ group, amount })).sort(
-    (a, b) => b.amount - a.amount
-  );
-
-  const cappedGroups = byGroup.slice(0, TOP_GROUPS);
-  if (byGroup.length > TOP_GROUPS) {
-    // Somar, nao descartar: byGroup tem de continuar a reconciliar com o total
-    // da seccao, senao a barra de composicao mente sobre a proporcao.
-    const rest = byGroup
-      .slice(TOP_GROUPS)
-      .reduce((s, g) => s + g.amount, 0);
-    cappedGroups.push({ group: "Other", amount: rest });
-  }
+  const byGroup = groupExpenses(spent);
 
   const topCategories = spent.slice(0, TOP_N);
   if (spent.length > TOP_N) {
@@ -193,7 +203,7 @@ export function monthDetail(
     savings,
     unallocated: income - expenses - savings,
     savingsRate: income > 0 ? savings / income : null,
-    byGroup: cappedGroups,
+    byGroup,
     topCategories,
   };
 }
