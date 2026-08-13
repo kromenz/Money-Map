@@ -101,6 +101,18 @@ describe("cumulativeSavings", () => {
     expect(serie.points).toEqual(Array(12).fill(null));
   });
 
+  it("acumula ate ao fim do ano sem nullar Dezembro", () => {
+    const savingsData = {
+      0: 10, 1: 20, 2: 15, 3: 25, 4: 30, 5: 12,
+      6: 18, 7: 22, 8: 16, 9: 14, 10: 11, 11: 9
+    };
+    const g = grid(2025, { income: { 0: 1 }, savings: savingsData });
+    const [serie] = cumulativeSavings([g]);
+    const sum = Object.values(savingsData).reduce((a, b) => a + b, 0);
+    expect(serie.points).not.toContain(null);
+    expect(serie.points[11]).toBe(sum);
+  });
+
   it("ordena por ano ascendente", () => {
     const series = cumulativeSavings([grid(2026, {}), grid(2024, {})]);
     expect(series.map((s) => s.year)).toEqual([2024, 2026]);
