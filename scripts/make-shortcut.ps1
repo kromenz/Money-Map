@@ -13,15 +13,15 @@ $ErrorActionPreference = "Stop"
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $target = Join-Path $RepoRoot "Money-Map.cmd"
-# O favicon da propria app: 16, 24, 32 e 64 pixeis. Chega para o tamanho normal
-# do ambiente de trabalho; nos icones extra grandes o Windows estica o de 64.
-$icon = Join-Path $RepoRoot "frontend\public\favicon.ico"
+# A marca do projecto, de 16 ate 256 pixeis. Gerada pelo scripts\make-icon.ps1 a
+# partir da geometria do frontend\app\icon.svg.
+$icon = Join-Path $RepoRoot "assets\moneymap.ico"
 
 if (-not (Test-Path $target)) {
     throw "Money-Map.cmd was not found next to this script. Run this from inside the repository."
 }
 if (-not (Test-Path $icon)) {
-    throw "The icon was not found at '$icon'."
+    throw "The icon was not found at '$icon'. Run scripts\make-icon.ps1 first."
 }
 
 if ($Desktop) {
