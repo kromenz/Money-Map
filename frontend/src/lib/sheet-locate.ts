@@ -54,6 +54,16 @@ function textValue(cell: ExcelJS.Cell): string {
   return "";
 }
 
+/**
+ * As celulas com dados sao quase todas formulas (=42.88+11.39). O exceljs
+ * devolve {formula, result} nesses casos, e o numero cru nos outros.
+ *
+ * Identico a numericValue de budget.parser.ts -- sem fallback a cell.result,
+ * de proposito. Uma formula com resultado zero nao guarda <v> no XML, por
+ * isso o exceljs devolve null aqui; e assim que o backend a le tambem, e a
+ * verificacao do import so bate se os dois lados classificarem a linha da
+ * mesma maneira.
+ */
 function numericValue(cell: ExcelJS.Cell): number | null {
   const v = cell.value;
   if (typeof v === "number") return v;
@@ -61,8 +71,6 @@ function numericValue(cell: ExcelJS.Cell): number | null {
     const result = (v as { result?: unknown }).result;
     if (typeof result === "number") return result;
   }
-  // For formula cells, ExcelJS stores the result in cell.result
-  if (typeof cell.result === "number") return cell.result;
   return null;
 }
 

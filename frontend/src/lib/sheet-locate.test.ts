@@ -59,7 +59,12 @@ describe("locateCells", () => {
   it("devolve as linhas de subtotal na mesma coluna do mes", async () => {
     const file = bytes();
     const parsed = await parseBudgetWorkbook(Buffer.from(file), 2026);
-    const withGroup = parsed.categories.find((c) => c.group !== "");
+    // Tem de ser um grupo cujo subtotal o backend tambem reconhece
+    // (existe em checksums.groups), senao o teste fica a comparar contra
+    // um subtotal que a verificacao do import nunca ve.
+    const withGroup = parsed.categories.find(
+      (c) => c.group !== "" && `${c.section}/${c.group}` in parsed.checksums.groups
+    );
     expect(withGroup).toBeDefined();
 
     const found = await locateCells(file, { ...withGroup!, month: 5 });
@@ -71,6 +76,25 @@ describe("locateCells", () => {
     expect(Number(found.groupSubtotal!.slice(1))).toBeGreaterThan(
       Number(found.cell.slice(1))
     );
+  });
+
+  it("devolve groupSubtotal null quando o backend nao reconhece o subtotal do grupo", async () => {
+    const file = bytes();
+    const parsed = await parseBudgetWorkbook(Buffer.from(file), 2026);
+    // Um grupo cujo subtotal e zero em todos os meses nao guarda <v> no XML
+    // (o exceljs omite o cache de uma formula com resultado zero), por isso
+    // nem o backend nem este localizador veem valor numerico nessa linha.
+    // Sem valor numerico, a linha nao e reconhecida como subtotal de grupo
+    // e checksums.groups fica sem entrada para ele -- nao ha nada para
+    // verificar, por isso o localizador tem de devolver null aqui tambem.
+    const withoutGroupChecksum = parsed.categories.find(
+      (c) => c.group !== "" && !(`${c.section}/${c.group}` in parsed.checksums.groups)
+    );
+    expect(withoutGroupChecksum).toBeDefined();
+
+    const found = await locateCells(file, { ...withoutGroupChecksum!, month: 5 });
+
+    expect(found.groupSubtotal).toBeNull();
   });
 
   it("recusa uma categoria que a folha nao tem", async () => {
