@@ -16,8 +16,11 @@ import { GroupComposition } from "../../src/components/dashboard/GroupCompositio
 import { yearGroups } from "../../src/lib/year-comparison";
 import { DashboardSkeleton } from "../../src/components/dashboard/DashboardSkeleton";
 import { FolderScanNotice } from "../../src/components/dashboard/FolderScanNotice";
+import { AddExpenseBar } from "../../src/components/dashboard/AddExpenseBar";
+import { PendingNotice } from "../../src/components/dashboard/PendingNotice";
 import { fetchGrid } from "../../src/services/budget.service";
 import { scanFolder } from "../../src/services/folder-scan.service";
+import { flushPending } from "../../src/services/expense.service";
 import { yearMetrics, monthDetail } from "../../src/lib/budget-metrics";
 import { categoryDeltas } from "../../src/lib/category-deltas";
 import { MONTH_LABELS } from "../../src/lib/format";
@@ -39,6 +42,8 @@ export default function DashboardPage() {
   const [folderConfigured, setFolderConfigured] = useState(false);
   const [folderFailures, setFolderFailures] = useState<FolderScanFailure[]>([]);
   const [scanning, setScanning] = useState(false);
+  const [pending, setPending] = useState(0);
+  const [flushing, setFlushing] = useState(false);
 
   // isPending cobre pending+fetching, pending+paused (offline) e
   // pending+disabled -- qualquer estado sem dados ainda, nao so "a carregar".
@@ -69,8 +74,26 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!data || scanned.current) return;
     scanned.current = true;
-    void runScan(false);
+    void runScan(false).then(() => applyPending());
   }, [data]);
+
+  // Aplicar a fila reescreve o ficheiro e reimporta, por isso a grelha tem de
+  // ser reposta a zero -- e o mesmo motivo por que registar um gasto a invalida.
+  async function applyPending() {
+    setFlushing(true);
+    try {
+      const result = await flushPending();
+      setPending(result.stillPending);
+      if (result.applied > 0) {
+        await queryClient.invalidateQueries({ queryKey: ["budget-grid"] });
+      }
+    } catch {
+      // O aviso fica como esta e o botao volta a ficar clicavel. Uma falha aqui
+      // nao perde nada: os pendentes continuam na fila.
+    } finally {
+      setFlushing(false);
+    }
+  }
 
   async function runScan(force: boolean) {
     setScanning(true);
@@ -190,6 +213,17 @@ export default function DashboardPage() {
 
     return (
       <div className="space-y-6">
+        <PendingNotice count={pending} busy={flushing} onApply={applyPending} />
+
+        <AddExpenseBar
+          year={year}
+          rows={data.rows}
+          onWritten={() => {
+            void queryClient.invalidateQueries({ queryKey: ["budget-grid", year] });
+          }}
+          onPending={setPending}
+        />
+
         {/* A faixa do ano: o resumo centrado com a largura toda, e o grafico
             por baixo. Importar vive na pasta e no botao do cabecalho. */}
         <YearSummary metrics={metrics} />
