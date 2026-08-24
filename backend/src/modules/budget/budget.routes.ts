@@ -6,6 +6,9 @@ import {
   previewWorkbook,
   getGrid,
   getYears,
+  queuePending,
+  getPending,
+  clearPendingHandler,
 } from "./budget.controller";
 
 const upload = multer({
@@ -32,5 +35,9 @@ budgetRouter.post(
 
 budgetRouter.get("/grid", authMiddleware, getGrid);
 budgetRouter.get("/years", authMiddleware, getYears);
+
+budgetRouter.post("/pending", authMiddleware, queuePending);
+budgetRouter.get("/pending", authMiddleware, getPending);
+budgetRouter.post("/pending/clear", authMiddleware, clearPendingHandler);
 
 export default budgetRouter;

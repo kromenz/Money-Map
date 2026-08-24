@@ -19,6 +19,7 @@ model User {
   categories    Category[]
   transactions  Transaction[]
   rules         Rule[]
+  pendingExpenses PendingExpense[]
 }
 
 enum AuthProvider {
@@ -126,4 +127,22 @@ model Rule {
   createdAt  DateTime @default(now())
 
   @@index([userId, priority])
+}
+
+/// Gastos registados pela app enquanto o .xlsx estava trancado pelo Excel.
+/// Guarda section/group/name e nao um categoryId: e a chave que o localizador
+/// da folha precisa, e sobrevive a uma reimportacao que recrie as categorias.
+model PendingExpense {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  year      Int
+  month     Int
+  section   String
+  group     String   @map("category_group")
+  name      String
+  amount    Decimal  @db.Decimal(12, 2)
+  createdAt DateTime @default(now())
+
+  @@index([userId, year])
 }
