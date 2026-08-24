@@ -3,6 +3,7 @@ import path from "node:path";
 import { NextResponse } from "next/server";
 import { planFolderScan } from "@/lib/folder-scan";
 import { yearFromFileName } from "@/lib/year-from-filename";
+import { withFolderLock } from "@/server/budget-file";
 import type {
   FolderScanFailure,
   FolderScanImport,
@@ -148,7 +149,9 @@ export async function POST(request: Request) {
     const previous = inFlight;
     inFlight = (previous ?? Promise.resolve())
       .catch(() => undefined)
-      .then(() => scan(folder, request.headers.get("cookie") ?? ""))
+      // Passa pela mesma exclusao mutua da escrita de gastos: um varrimento
+      // nunca le a pasta enquanto um .xlsx esta a ser substituido.
+      .then(() => withFolderLock(() => scan(folder, request.headers.get("cookie") ?? "")))
       .then((result) => {
         // So o varrimento mais recente pode escrever no cache: um varrimento
         // antigo a acabar depois de um forcado apagava dados mais frescos.
