@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { applyExpenses } from "@/lib/xlsx-package";
+import { applyExpenses, MultiSheetError } from "@/lib/xlsx-package";
 import { SheetTargetError } from "@/lib/sheet-locate";
 import {
   budgetFolder,
@@ -10,6 +10,7 @@ import {
   SheetMissingError,
   withFolderLock,
   writeYear,
+  type WriteResult,
 } from "@/server/budget-file";
 import type { AddExpenseResponse, NewExpense } from "@/types/expense";
 
@@ -98,28 +99,48 @@ export async function POST(request: Request) {
       ]);
     } catch (err) {
       if (err instanceof SheetTargetError) return bad("that category is not in the sheet");
+      // Mensagem propria: um workbook com mais de uma folha nao e um ficheiro
+      // em falta, e dizer "no readable sheet" mandava o utilizador procurar
+      // um ficheiro que existe e abre bem.
+      if (err instanceof MultiSheetError) {
+        return bad("the budget workbook must have exactly one sheet");
+      }
       // O erro do fs traz o caminho absoluto embutido na mensagem. Nao pode
       // chegar ao browser -- a mesma regra que o folder-scan ja segue.
       return bad(`there is no readable sheet for ${body.year} in the budget folder`);
     }
 
-    let result: { ok: true } | { ok: false; reason: string };
+    let result: WriteResult;
     try {
       result = await writeYear(folder, body.year, written, cookie);
     } catch {
-      // O rename dentro de writeYear pode falhar com EPERM/EBUSY se o Excel
-      // abrir o ficheiro na janela entre o isLocked la em cima e agora -- um
-      // ExcelJS parse e um zip inteiro por reconstruir separam as duas
-      // verificacoes. Sem isto o erro escapava do withFolderLock sem guarda
-      // nenhuma: 500 opaco com o caminho absoluto la dentro em dev, e o gasto
-      // perdido em vez de enfileirado. Em vez disso trata-se como o mesmo
-      // caso do ficheiro trancado -- o gasto sobrevive como pendente.
+      // Isto so pode vir da parte de writeYear que corre ANTES do rename
+      // substituir a folha (o backup inicial ou a escrita do .tmp) -- essa
+      // parte continua a lancar em vez de devolver, porque nada foi escrito
+      // ainda. O rename pode falhar com EPERM/EBUSY se o Excel abrir o
+      // ficheiro na janela entre o isLocked la em cima e agora -- um ExcelJS
+      // parse e um zip inteiro por reconstruir separam as duas verificacoes.
+      // Sem isto o erro escapava do withFolderLock sem guarda nenhuma: 500
+      // opaco com o caminho absoluto la dentro em dev, e o gasto perdido em
+      // vez de enfileirado. Em vez disso trata-se como o mesmo caso do
+      // ficheiro trancado -- o gasto sobrevive como pendente. Nao enfileira
+      // duplicado: a falha de reposicao DEPOIS do rename (folha ja com o
+      // gasto) nunca chega aqui, porque writeYear devolve-a em vez de a
+      // lancar -- ver alreadyWritten abaixo.
       return respondPending();
     }
     // "=== false" e nao "!result.ok": sem strictNullChecks (tsconfig deste
     // projecto), a negacao nao estreita a uniao discriminada e o tsc reclama
     // que "reason" nao existe.
-    if (result.ok === false) return bad(result.reason, 409);
+    if (result.ok === false) {
+      // alreadyWritten distingue a folha ja ter o gasto (a reposicao do
+      // backup falhou) de o import ter recusado com o backup reposto. Nos
+      // dois casos a resposta e a mesma chamada -- nunca se enfileira, so se
+      // relata o erro -- mas o ramo fica explicito para nao voltar a cair no
+      // erro que este item corrige.
+      if (result.alreadyWritten) return bad(result.reason, 409);
+      return bad(result.reason, 409);
+    }
 
     return NextResponse.json({
       status: "written",

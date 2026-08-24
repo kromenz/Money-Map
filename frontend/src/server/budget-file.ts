@@ -93,6 +93,25 @@ export async function readYear(folder: string, year: number): Promise<Uint8Array
 }
 
 /**
+ * Resultado de writeYear.
+ *
+ * "alreadyWritten" distingue as duas formas de falhar depois do rename ter
+ * substituido a folha:
+ *  - false: o import recusou e o backup foi reposto -- a folha voltou ao
+ *    estado anterior, nada para enfileirar, so relatar o erro.
+ *  - true: o import recusou e a REPOSICAO do backup tambem falhou -- a folha
+ *    fica com o gasto la escrito. Enfileirar isto como pendente escrevia-o
+ *    outra vez no proximo flush, duplicando-o. Os dois casos tem "ok: false"
+ *    para que qualquer chamador que ainda nao saiba desta distincao continue
+ *    a tratar como erro (nunca como sucesso), mas os chamadores que
+ *    verificam alreadyWritten tratam-nos de forma diferente.
+ */
+export type WriteResult =
+  | { ok: true }
+  | { ok: false; reason: string; alreadyWritten: false }
+  | { ok: false; reason: string; alreadyWritten: true };
+
+/**
  * Grava, importa, e repoe o backup se o import nao aceitar.
  *
  * O backup vai para uma subpasta e nunca para a raiz: o planFolderScan rejeita
@@ -108,7 +127,7 @@ export async function writeYear(
   year: number,
   bytes: Uint8Array,
   cookie: string
-): Promise<{ ok: true } | { ok: false; reason: string }> {
+): Promise<WriteResult> {
   const target = sheetPath(folder, year);
 
   const backupDir = path.join(folder, BACKUPS);
@@ -134,10 +153,41 @@ export async function writeYear(
   }
 
   const imported = await importYear(year, bytes, cookie);
-  if (imported.ok) return { ok: true };
+  if (imported.ok === true) return { ok: true };
+  // "=== true"/"=== false" e nao "if (x.ok)"/"!x.ok": sem strictNullChecks
+  // (tsconfig deste projecto) o tsc so estreita a uniao discriminada por
+  // comparacao com o literal, nunca por veracidade -- mesma regra que ja
+  // documentada mais abaixo para o "result" da rota.
+  const importReason = imported.ok === false ? imported.reason : "";
 
-  await copyFile(backup, target);
-  return imported;
+  const restored = await restoreBackup(backup, target);
+  if (!restored) {
+    // O rename ja tinha substituido a folha por esta com o gasto la dentro,
+    // e agora a reposicao do backup tambem falhou -- provavelmente o Excel
+    // agarrou o ficheiro nesta janela. A folha fica exactamente como o
+    // import recusou: com o gasto escrito e os subtotais que nao batem. Nao
+    // se pode devolver isto como se nada tivesse sido escrito -- ver o
+    // comentario em WriteResult.
+    return {
+      ok: false,
+      reason:
+        "the sheet may already contain this expense, and the backup could not be restored automatically",
+      alreadyWritten: true,
+    };
+  }
+
+  return { ok: false, reason: importReason, alreadyWritten: false };
+}
+
+/** Repoe o backup por copia. Devolve false em vez de lancar -- writeYear
+ * precisa de distinguir este caso do resto, nao de o tratar como excepcao. */
+async function restoreBackup(backup: string, target: string): Promise<boolean> {
+  try {
+    await copyFile(backup, target);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function importYear(
@@ -231,4 +281,32 @@ export async function clearPending(cookie: string, ids: string[]): Promise<boole
   } catch {
     return false;
   }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Tenta limpar ate 3 vezes, com uma pequena pausa entre tentativas.
+ *
+ * Isto estreita a janela do duplo-registo (uma quebra so transitoria na rede
+ * ou no backend deixava de sujar a fila), mas nao a fecha: uma falha
+ * persistente ainda deixa os ids por limpar e devolve false, o mesmo estado
+ * distinto que ja existia. Fechar a janela a serio precisava de a escrita
+ * ser idempotente -- por exemplo o backend recusar aplicar um id de pendente
+ * que ja tivesse marcado como aplicado -- o que nao existe hoje e fica fora
+ * deste ajuste.
+ */
+export async function clearPendingRetrying(
+  cookie: string,
+  ids: string[],
+  attempts = 3,
+  waitMs = 300
+): Promise<boolean> {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    if (await clearPending(cookie, ids)) return true;
+    if (attempt < attempts) await delay(waitMs);
+  }
+  return false;
 }

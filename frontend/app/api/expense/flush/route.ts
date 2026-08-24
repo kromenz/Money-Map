@@ -3,7 +3,7 @@ import { applyExpenses } from "@/lib/xlsx-package";
 import { groupPendingByYear } from "@/lib/pending-plan";
 import {
   budgetFolder,
-  clearPending,
+  clearPendingRetrying,
   fetchPending,
   isExcelLock,
   isLocked,
@@ -77,14 +77,28 @@ export async function POST(request: Request) {
         // deste projecto), a negacao nao estreita a uniao discriminada e o
         // tsc reclama que "reason" nao existe.
         if (result.ok === false) {
+          if (result.alreadyWritten) {
+            // A folha ja tem o gasto -- a reposicao do backup falhou depois
+            // do rename. Enfileirar de novo escrevia-o outra vez no proximo
+            // flush, duplicando-o na folha do utilizador. Tenta-se limpar
+            // estes ids da fila com retentativas (as mesmas do item B); se
+            // mesmo assim falhar, ficam por limpar mas a razao ja avisa
+            // claramente que nao se deve reaplicar.
+            const cleared = await clearPendingRetrying(cookie, batch.ids);
+            if (!cleared) stillPending += batch.ids.length;
+            failures.push({ year: batch.year, reason: result.reason });
+            continue;
+          }
           stillPending += batch.ids.length;
           failures.push({ year: batch.year, reason: result.reason });
           continue;
         }
 
         // So depois de o import aceitar. Limpar antes perdia os gastos se o
-        // import revertesse.
-        const cleared = await clearPending(cookie, batch.ids);
+        // import revertesse. Com retentativas (item B): uma quebra so
+        // transitoria no pedido de limpeza nao deixa a fila suja; nao fecha
+        // a janela por completo -- ver o comentario em clearPendingRetrying.
+        const cleared = await clearPendingRetrying(cookie, batch.ids);
         if (!cleared) {
           // A folha ja tem os gastos escritos -- o import aceitou. Mas os
           // ids continuam na fila, por isso NAO contam como aplicados: se

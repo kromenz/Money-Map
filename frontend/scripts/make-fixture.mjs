@@ -1,7 +1,7 @@
 // Script de uma vez (por ano). Le o .xlsx real e escreve a fixture anonimizada.
 //
-//   node scripts/make-fixture.mjs "D:\budget\2026.xlsx"
-//   node scripts/make-fixture.mjs "D:\budget\2025.xlsx" src/lib/__fixtures__/budget-2025.xlsx
+//   node scripts/make-fixture.mjs "<pasta do orcamento>\2026.xlsx"
+//   node scripts/make-fixture.mjs "<pasta do orcamento>\2025.xlsx" src/lib/__fixtures__/budget-2025.xlsx
 //
 // O segundo argumento (opcional) e o caminho de saida. Sem ele, deriva-se do
 // ano no nome do ficheiro de origem (ex.: "2025.xlsx" -> "budget-2025.xlsx"),

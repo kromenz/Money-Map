@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { unzipSync } from "fflate";
 // O parser real do backend. Importa so o exceljs, nada de Prisma, por isso
@@ -7,10 +7,17 @@ import { unzipSync } from "fflate";
 // fixture e lida exactamente pelas regras que o import usa.
 import { parseBudgetWorkbook } from "../../../backend/src/modules/budget/budget.parser";
 
-const FIXTURE = path.resolve(__dirname, "__fixtures__/budget-2026.xlsx");
-const fixtureBytes = () => new Uint8Array(readFileSync(FIXTURE));
+const FIXTURES_DIR = path.resolve(__dirname, "__fixtures__");
 
-describe("fixture", () => {
+// Todas as fixtures da pasta, nao so a de 2026 -- ja houve uma fuga real de
+// dados pessoais numa fixture que este guarda nao cobria (ver progress.md,
+// Ruling P29c). Uma fixture nova entra automaticamente nesta cobertura, sem
+// precisar de mais uma linha aqui.
+const fixtures = readdirSync(FIXTURES_DIR).filter((f) => f.endsWith(".xlsx"));
+
+describe.each(fixtures)("fixture %s", (name) => {
+  const fixtureBytes = () => new Uint8Array(readFileSync(path.join(FIXTURES_DIR, name)));
+
   it("tem as partes que uma regravacao com ExcelJS destruiria", () => {
     const files = unzipSync(fixtureBytes());
     expect(Object.keys(files)).toEqual(
@@ -24,10 +31,8 @@ describe("fixture", () => {
   });
 
   it("tem as tres seccoes e categorias em todas", async () => {
-    const parsed = await parseBudgetWorkbook(
-      Buffer.from(fixtureBytes()),
-      2026
-    );
+    const year = Number(name.match(/(\d{4})/)?.[1]);
+    const parsed = await parseBudgetWorkbook(Buffer.from(fixtureBytes()), year);
     const sections = new Set(parsed.categories.map((c) => c.section));
     expect(sections).toEqual(new Set(["income", "savings", "expenses"]));
     expect(parsed.categories.length).toBeGreaterThan(20);
@@ -75,10 +80,8 @@ describe("fixture", () => {
   });
 
   it("os subtotais de grupo batem com a soma das suas categorias", async () => {
-    const parsed = await parseBudgetWorkbook(
-      Buffer.from(fixtureBytes()),
-      2026
-    );
+    const year = Number(name.match(/(\d{4})/)?.[1]);
+    const parsed = await parseBudgetWorkbook(Buffer.from(fixtureBytes()), year);
 
     for (const [key, declared] of Object.entries(parsed.checksums.groups)) {
       const [section, group] = key.split("/");
@@ -96,5 +99,14 @@ describe("fixture", () => {
         expect(Math.abs(sum - sheet)).toBeLessThanOrEqual(0.005);
       }
     }
+  });
+});
+
+describe("fixture directory", () => {
+  it("tem pelo menos uma fixture para cobrir", () => {
+    // Rede contra o proprio describe.each: se a pasta ficar vazia por engano
+    // (ex.: um .gitignore mal escrito), describe.each(["]) simplesmente nao
+    // gera testes nenhuns e a suite passava "verde" sem verificar nada.
+    expect(fixtures.length).toBeGreaterThan(0);
   });
 });
