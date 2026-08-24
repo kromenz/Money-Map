@@ -1,4 +1,4 @@
-import type { AddExpenseResponse, NewExpense } from "../types/expense";
+import type { AddExpenseResponse, FlushResponse, NewExpense } from "../types/expense";
 
 /**
  * Chama o route handler do proprio Next, nao a API. E por isso que nao usa o
@@ -15,4 +15,10 @@ export async function addExpense(
   });
 
   return (await res.json()) as AddExpenseResponse;
+}
+
+export async function flushPending(): Promise<FlushResponse> {
+  const res = await fetch("/api/expense/flush", { method: "POST" });
+  if (!res.ok) throw new Error(`Flush failed (${res.status})`);
+  return (await res.json()) as FlushResponse;
 }
