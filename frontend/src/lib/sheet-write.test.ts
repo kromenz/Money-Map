@@ -146,6 +146,23 @@ describe("applyEdits, celulas de texto (t=\"s\"/\"str\"/\"inlineStr\")", () => {
     expect(out).not.toContain("<v>64</v>");
   });
 
+  it("t=\"s\" numa celula de subtotal em modo valor perde o t e nao herda o indice", () => {
+    // locateCells devolve a mesma linha de subtotal para todos os meses assim
+    // que um mes qualquer tiver numero -- por isso uma linha numerica na
+    // maioria dos meses mas com o marcador "-" nalgum mes especifico chega
+    // aqui em modo valor, tal como uma celula de categoria chegaria em modo
+    // formula. Deixar o t="s" ficava a mentir sobre o <v> novo, que um
+    // leitor voltaria a resolver como indice de shared string.
+    const out = applyEdits(
+      sheet(`<c r="C30" s="40" t="s"><v>59</v></c>`, 30),
+      [{ ref: "C30", delta: 5, mode: "value" }]
+    );
+
+    expect(out).toContain(`<c r="C30" s="40"><v>5</v></c>`);
+    expect(out).not.toContain('t="s"');
+    expect(out).not.toContain("<v>64</v>");
+  });
+
   it("t=\"str\" em modo formula comporta-se como t=\"s\"", () => {
     const out = applyEdits(
       sheet(`<c r="C44" s="57" t="str"><f>"-"</f><v>-</v></c>`, 44),

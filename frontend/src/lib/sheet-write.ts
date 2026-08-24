@@ -79,13 +79,27 @@ function clean(value: number): number {
   return Number(value.toFixed(10));
 }
 
+/**
+ * Escrever um numero em <v> sobre uma etiqueta ainda marcada t="s"/"str"/
+ * "inlineStr" transforma esse numero num indice de shared string aos olhos de
+ * qualquer leitor -- o t mentiria sobre o que o <v> novo significa. Aplica-se
+ * tambem a uma linha de subtotal: locateCells devolve a mesma linha para
+ * todos os meses assim que qualquer mes tiver numero, por isso um subtotal
+ * numerico na maioria dos meses mas com o marcador "-" nalgum mes especifico
+ * passa por aqui em modo valor.
+ */
+function stripTextType(cell: string): string {
+  return isTextCell(cell) ? cell.replace(/\s+t="(?:s|str|inlineStr)"/, "") : cell;
+}
+
 function withValue(cell: string, value: number): string {
   const text = String(clean(value));
-  if (/<v>[^<]*<\/v>/.test(cell)) {
-    return cell.replace(/<v>[^<]*<\/v>/, `<v>${text}</v>`);
+  const untyped = stripTextType(cell);
+  if (/<v>[^<]*<\/v>/.test(untyped)) {
+    return untyped.replace(/<v>[^<]*<\/v>/, `<v>${text}</v>`);
   }
   // Sem <v>: acrescenta-o antes do fecho.
-  return cell.replace(/<\/c>$/, `<v>${text}</v></c>`);
+  return untyped.replace(/<\/c>$/, `<v>${text}</v></c>`);
 }
 
 /** O estilo de qualquer outra celula da mesma linha, para uma celula nova herdar. */
