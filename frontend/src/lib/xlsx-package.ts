@@ -1,0 +1,77 @@
+import { unzipSync, zipSync } from "fflate";
+import { locateCells } from "./sheet-locate";
+import { applyEdits, type Edit } from "./sheet-write";
+import type { NewExpense } from "@/types/expense";
+
+const SHEET = "xl/worksheets/sheet1.xml";
+const WORKBOOK = "xl/workbook.xml";
+const CALC_CHAIN = "xl/calcChain.xml";
+const CONTENT_TYPES = "[Content_Types].xml";
+
+const decode = (b: Uint8Array) => new TextDecoder().decode(b);
+const encode = (s: string) => new TextEncoder().encode(s);
+
+/**
+ * O Excel recalcula tudo ao abrir.
+ *
+ * Depois de mexer numa celula, todos os valores em cache que dependem dela --
+ * a coluna O dos totais anuais, o Potential to Save, as series dos graficos --
+ * ficam desactualizados. Isto faz o Excel recalcula-los, portanto o utilizador
+ * nunca ve um numero velho. Nao afecta o import: o parser so le as colunas C..N,
+ * que esta reescrita ja deixa correctas.
+ */
+function withFullCalc(workbookXml: string): string {
+  if (/<calcPr[^>]*fullCalcOnLoad="1"/.test(workbookXml)) return workbookXml;
+  if (/<calcPr\b/.test(workbookXml)) {
+    return workbookXml.replace(/<calcPr\b([^>]*?)\s*\/>/, '<calcPr$1 fullCalcOnLoad="1"/>');
+  }
+  return workbookXml.replace("</workbook>", '<calcPr fullCalcOnLoad="1"/></workbook>');
+}
+
+/**
+ * O calcChain descreve a ordem de calculo celula a celula. Deixa-lo
+ * desactualizado depois de mexer numa formula e a causa classica do aviso de
+ * ficheiro corrompido. O Excel reconstroi-o sozinho.
+ */
+function dropCalcChain(types: string): string {
+  return types.replace(/<Override[^>]*calcChain[^>]*\/>/g, "");
+}
+
+/**
+ * Escreve os gastos na folha e devolve os bytes do .xlsx novo.
+ *
+ * Todas as partes do zip que nao sejam a folha, o workbook, o calcChain e o
+ * Content_Types saem exactamente como entraram -- em particular os dois
+ * graficos, que uma regravacao com ExcelJS destruiria.
+ */
+export async function applyExpenses(
+  file: Uint8Array,
+  expenses: NewExpense[]
+): Promise<Uint8Array> {
+  const files = unzipSync(file);
+  if (!files[SHEET]) throw new Error("O .xlsx nao tem xl/worksheets/sheet1.xml");
+
+  const edits: Edit[] = [];
+  for (const expense of expenses) {
+    // Localiza-se sempre sobre o ficheiro original: as linhas nao se movem, e
+    // so mudam valores.
+    const found = await locateCells(file, expense);
+    edits.push({ ref: found.cell, delta: expense.amount, mode: "formula" });
+    if (found.groupSubtotal) {
+      edits.push({ ref: found.groupSubtotal, delta: expense.amount, mode: "value" });
+    }
+    if (found.sectionTotal) {
+      edits.push({ ref: found.sectionTotal, delta: expense.amount, mode: "value" });
+    }
+  }
+
+  files[SHEET] = encode(applyEdits(decode(files[SHEET]), edits));
+
+  if (files[WORKBOOK]) files[WORKBOOK] = encode(withFullCalc(decode(files[WORKBOOK])));
+  if (files[CONTENT_TYPES]) {
+    files[CONTENT_TYPES] = encode(dropCalcChain(decode(files[CONTENT_TYPES])));
+  }
+  delete files[CALC_CHAIN];
+
+  return zipSync(files);
+}
