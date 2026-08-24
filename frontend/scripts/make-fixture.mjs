@@ -1,6 +1,11 @@
-// Script de uma vez. Le o .xlsx real e escreve a fixture anonimizada.
+// Script de uma vez (por ano). Le o .xlsx real e escreve a fixture anonimizada.
 //
 //   node scripts/make-fixture.mjs "D:\budget\2026.xlsx"
+//   node scripts/make-fixture.mjs "D:\budget\2025.xlsx" src/lib/__fixtures__/budget-2025.xlsx
+//
+// O segundo argumento (opcional) e o caminho de saida. Sem ele, deriva-se do
+// ano no nome do ficheiro de origem (ex.: "2025.xlsx" -> "budget-2025.xlsx"),
+// para o script nao ficar preso a um unico ano hardcoded.
 //
 // A anonimizacao e um factor de escala por seccao. Escalar todos os numeros de
 // uma seccao pelo mesmo factor preserva exactamente todas as somas dessa seccao
@@ -14,7 +19,6 @@ const SHEET = "xl/worksheets/sheet1.xml";
 const CHART_FILES = ["xl/charts/chart1.xml", "xl/charts/chart2.xml"];
 const CORE = "docProps/core.xml";
 const WORKBOOK = "xl/workbook.xml";
-const OUT = "src/lib/__fixtures__/budget-2026.xlsx";
 
 // Fixos e nao aleatorios, para a fixture ser reproduzivel.
 const FACTORS = { Income: 0.6137, Savings: 1.2841, Expenses: 0.8329 };
@@ -30,9 +34,23 @@ const LABEL_COLUMN = "B";
 
 const source = process.argv[2];
 if (!source) {
-  console.error("uso: node scripts/make-fixture.mjs <caminho do .xlsx real>");
+  console.error(
+    "uso: node scripts/make-fixture.mjs <caminho do .xlsx real> [caminho de saida]"
+  );
   process.exit(1);
 }
+
+const yearMatch = path.basename(source).match(/(\d{4})/);
+const OUT =
+  process.argv[3] ??
+  (yearMatch
+    ? `src/lib/__fixtures__/budget-${yearMatch[1]}.xlsx`
+    : (() => {
+        console.error(
+          "nao consegui derivar o ano do nome do ficheiro de origem -- indica o caminho de saida explicitamente"
+        );
+        process.exit(1);
+      })());
 
 const files = unzipSync(new Uint8Array(readFileSync(source)));
 const decode = (name) => new TextDecoder().decode(files[name]);

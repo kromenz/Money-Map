@@ -48,8 +48,21 @@ function cellPattern(ref: string): RegExp {
   return new RegExp(`<c[^>]*\\br="${ref}"[^>]*?(?:/>|>[\\s\\S]*?</c>)`);
 }
 
-/** O valor em cache, ou 0 quando a celula nao tem nenhum. */
+/**
+ * A celula tem t="s" (shared string), t="str" (formula com resultado texto)
+ * ou t="inlineStr" (texto embutido)?
+ *
+ * Nestes tres casos o conteudo de <v> nao e um numero: em t="s" e um indice
+ * para xl/sharedStrings.xml, nao um montante. A folha usa "-" como marcador
+ * de mes sem movimento em varias categorias, guardado assim.
+ */
+function isTextCell(cell: string): boolean {
+  return /<c[^>]*\bt="(?:s|str|inlineStr)"/.test(cell);
+}
+
+/** O valor em cache, ou 0 quando a celula nao tem nenhum ou e uma celula de texto. */
 function cachedValue(cell: string): number {
+  if (isTextCell(cell)) return 0;
   const m = /<v>([^<]*)<\/v>/.exec(cell);
   if (!m) return 0;
   const n = Number(m[1]);
@@ -81,11 +94,21 @@ function neighbourStyle(row: string): string {
   return m ? ` s="${m[1]}"` : "";
 }
 
-/** A etiqueta de abertura, sempre em forma aberta mesmo se a celula era `<c ... />`. */
+/**
+ * A etiqueta de abertura, sempre em forma aberta mesmo se a celula era
+ * `<c ... />`, e sem o atributo `t`.
+ *
+ * O `t` (tipo da celula: "s" indice de shared string, "str" resultado texto
+ * de formula, "inlineStr" texto embutido, ou ausente para numero) descreve o
+ * conteudo antigo de `<v>`. Depois desta funcao a celula passa a ter uma
+ * formula numerica com um `<v>` numerico -- manter um `t` de texto faria um
+ * leitor interpretar esse `<v>` novo como indice de shared string outra vez.
+ */
 function openTag(cell: string): string {
   const m = /^<c[^>]*?\/?>/.exec(cell);
   if (!m) throw new SheetWriteError(`Celula com forma inesperada: ${cell.slice(0, 40)}`);
-  return m[0].endsWith("/>") ? `${m[0].slice(0, -2)}>` : m[0];
+  const open = m[0].endsWith("/>") ? `${m[0].slice(0, -2)}>` : m[0];
+  return open.replace(/\s+t="[^"]*"/, "");
 }
 
 /**
@@ -101,9 +124,15 @@ function editFormulaCell(cell: string, delta: number): string {
     );
   }
 
+  // Uma celula de texto (t="s"/"str"/"inlineStr") nao tem formula nem valor
+  // aritmetico para aproveitar, mesmo que tenha um <v> -- esse <v> e um
+  // indice de shared string (ex.: o marcador "-" usado nos meses sem
+  // movimento), nao um montante. Trata-se como vazia: a edicao comeca do
+  // zero, tal como uma celula sem <f> nem <v>.
+  const textCell = isTextCell(cell);
   const current = cachedValue(cell);
-  const formula = /<f[^>]*>([^<]*)<\/f>/.exec(cell);
-  const hasValue = /<v>[^<]*<\/v>/.test(cell);
+  const formula = !textCell ? /<f[^>]*>([^<]*)<\/f>/.exec(cell) : null;
+  const hasValue = !textCell && /<v>[^<]*<\/v>/.test(cell);
 
   // Anexar a uma expressao aritmetica completa e sempre correcto, incluindo
   // -(a+b): o menos unario aplica-se ao grupo entre parenteses e nao ao que vem

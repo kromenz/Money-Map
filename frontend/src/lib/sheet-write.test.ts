@@ -120,6 +120,53 @@ describe("applyEdits, modo valor", () => {
   });
 });
 
+describe("applyEdits, celulas de texto (t=\"s\"/\"str\"/\"inlineStr\")", () => {
+  // A folha real usa "-" (shared string) como marcador de mes sem movimento
+  // em varias categorias. O indice guardado em <v> (ex.: 59 para a string
+  // "-") nao e um montante -- tratar essa celula como se tivesse valor 59 fazia
+  // a categoria crescer 59+delta enquanto os subtotais so cresciam delta, e o
+  // "t=\"s\"" ficava, sem sentido, numa celula agora numerica.
+  it("t=\"s\" em modo formula ignora o indice e produz uma formula nova", () => {
+    const out = applyEdits(
+      sheet(`<c r="C44" s="57" t="s"><v>59</v></c>`, 44),
+      [{ ref: "C44", delta: 5, mode: "formula" }]
+    );
+
+    expect(out).toContain(`<c r="C44" s="57"><f>5</f><v>5</v></c>`);
+    expect(out).not.toContain('t="s"');
+  });
+
+  it("t=\"s\" em modo valor nao herda o indice", () => {
+    const out = applyEdits(
+      sheet(`<c r="C44" s="57" t="s"><v>59</v></c>`, 44),
+      [{ ref: "C44", delta: 5, mode: "value" }]
+    );
+
+    expect(out).toContain("<v>5</v>");
+    expect(out).not.toContain("<v>64</v>");
+  });
+
+  it("t=\"str\" em modo formula comporta-se como t=\"s\"", () => {
+    const out = applyEdits(
+      sheet(`<c r="C44" s="57" t="str"><f>"-"</f><v>-</v></c>`, 44),
+      [{ ref: "C44", delta: 5, mode: "formula" }]
+    );
+
+    expect(out).toContain(`<c r="C44" s="57"><f>5</f><v>5</v></c>`);
+    expect(out).not.toContain('t="str"');
+  });
+
+  it("t=\"inlineStr\" em modo formula comporta-se como t=\"s\"", () => {
+    const out = applyEdits(
+      sheet(`<c r="C44" s="57" t="inlineStr"><is><t>-</t></is></c>`, 44),
+      [{ ref: "C44", delta: 5, mode: "formula" }]
+    );
+
+    expect(out).toContain(`<c r="C44" s="57"><f>5</f><v>5</v></c>`);
+    expect(out).not.toContain('t="inlineStr"');
+  });
+});
+
 describe("applyEdits, varias de uma vez", () => {
   it("aplica todas as edicoes ao mesmo XML", () => {
     // C26 (categoria) e C30 (subtotal) vivem em linhas diferentes, como numa

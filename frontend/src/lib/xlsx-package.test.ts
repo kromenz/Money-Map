@@ -341,3 +341,108 @@ describe("applyExpenses", () => {
     ).rejects.toThrow(SheetTargetError);
   });
 });
+
+/**
+ * Regressao com a fixture 2025 (celulas de mes com placeholder "-").
+ *
+ * A fixture 2026 nao consegue cobrir o defeito do t="s" (ver sheet-write.ts,
+ * cachedValue/editFormulaCell): nenhuma das suas celulas de categoria e uma
+ * celula de texto. A fixture 2025 vem de um .xlsx real onde Janeiro-Outubro
+ * usam "-" (shared string) como marcador de mes sem movimento em todas as
+ * categorias de despesa; so Novembro/Dezembro tem numeros reais. Escrever um
+ * gasto num desses meses de placeholder e exactamente o caminho que rebentava:
+ * cachedValue lia o indice da shared string como se fosse um montante.
+ */
+describe("applyExpenses, fixture 2025 (celulas de placeholder \"-\")", () => {
+  const bytes2025 = () =>
+    new Uint8Array(
+      readFileSync(path.resolve(__dirname, "__fixtures__/budget-2025.xlsx"))
+    );
+
+  async function expenseCategoryWithGroupChecksum() {
+    const parsed = await parseBudgetWorkbook(Buffer.from(bytes2025()), 2025);
+
+    const groupsWithChecksum = new Set(
+      Object.keys(parsed.checksums.groups)
+        .filter((key) => key.startsWith("expenses/"))
+        .map((key) => key.slice("expenses/".length))
+    );
+
+    const c = parsed.categories.find(
+      (x) => x.section === "expenses" && groupsWithChecksum.has(x.group)
+    );
+    if (!c) {
+      throw new Error(
+        "a fixture 2025 nao tem uma despesa num grupo com subtotal registado em checksums.groups"
+      );
+    }
+    return c;
+  }
+
+  it("um gasto em Janeiro (celula de placeholder) mantem os checksums a bater", async () => {
+    // Antes da correccao em sheet-write.ts, isto falhava: a categoria ganhava
+    // o indice da shared string do "-" (59) somado ao delta em vez de so o
+    // delta, os subtotais so ganhavam o delta, e a soma das celulas deixava de
+    // bater com o subtotal declarado pela propria folha.
+    const target = await expenseCategoryWithGroupChecksum();
+    const written = await applyExpenses(bytes2025(), [
+      { ...target, month: 1, amount: 5 },
+    ]);
+
+    const parsed = await parseBudgetWorkbook(Buffer.from(written), 2025);
+
+    for (const [key, declared] of Object.entries(parsed.checksums.groups)) {
+      const [section, group] = key.split("/");
+      for (let month = 1; month <= 12; month += 1) {
+        const sheet = declared.months[month - 1];
+        if (sheet === null) continue;
+
+        const sum = parsed.cells
+          .filter(
+            (c) => c.section === section && c.group === group && c.month === month
+          )
+          .reduce((a, c) => a + c.sheetValue, 0);
+
+        expect(Math.abs(sum - sheet)).toBeLessThanOrEqual(0.005);
+      }
+    }
+
+    for (const section of ["income", "savings", "expenses"] as const) {
+      const declared = parsed.checksums.sections[section].months;
+      for (let month = 1; month <= 12; month += 1) {
+        const sheet = declared[month - 1];
+        if (sheet === null) continue;
+
+        const sum = parsed.cells
+          .filter((c) => c.section === section && c.month === month)
+          .reduce((a, c) => a + c.sheetValue, 0);
+
+        expect(Math.abs(sum - sheet)).toBeLessThanOrEqual(0.005);
+      }
+    }
+  });
+
+  it("o valor novo da categoria e exactamente o delta, nao delta + indice da shared string", async () => {
+    const target = await expenseCategoryWithGroupChecksum();
+    const written = await applyExpenses(bytes2025(), [
+      { ...target, month: 1, amount: 5 },
+    ]);
+
+    const before = await parseBudgetWorkbook(Buffer.from(bytes2025()), 2025);
+    const after = await parseBudgetWorkbook(Buffer.from(written), 2025);
+
+    const find = (p: typeof before) =>
+      p.cells.find(
+        (c) =>
+          c.section === target.section &&
+          c.group === target.group &&
+          c.name === target.name &&
+          c.month === 1
+      )?.sheetValue ?? 0;
+
+    // Antes de qualquer gasto a celula e um placeholder de texto, por isso o
+    // parser nem sequer a regista em parsed.cells (find devolve 0 via `?? 0`).
+    expect(find(before)).toBe(0);
+    expect(find(after)).toBeCloseTo(5, 2);
+  });
+});
