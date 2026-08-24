@@ -33,15 +33,19 @@ function columnBefore(a: string, b: string): boolean {
 }
 
 function rowPattern(row: number): RegExp {
-  return new RegExp(`<row[^>]*\\br="${row}"[^>]*>.*?</row>`, "s");
+  // "[\s\S]" em vez de "." com a flag "s" (dotAll): essa flag exige o target
+  // es2018+ no tsconfig, e o resto da app compila para es2017. "[\s\S]"
+  // atravessa linhas sem precisar da flag e tem exactamente o mesmo efeito.
+  return new RegExp(`<row[^>]*\\br="${row}"[^>]*>[\\s\\S]*?</row>`);
 }
 
 function cellPattern(ref: string): RegExp {
   // O quantificador antes da alternativa tem de ser preguicoso: se for guloso,
   // engole o "/" de um "<c .../>" e a alternativa "/>" nunca chega a ser
   // tentada, caindo na alternativa ">...</c>", que entao avanca ate ao "</c>"
-  // da celula seguinte na linha.
-  return new RegExp(`<c[^>]*\\br="${ref}"[^>]*?(?:/>|>.*?</c>)`, "s");
+  // da celula seguinte na linha. "[\s\S]" substitui "." com a flag "s" pela
+  // mesma razao que em rowPattern acima.
+  return new RegExp(`<c[^>]*\\br="${ref}"[^>]*?(?:/>|>[\\s\\S]*?</c>)`);
 }
 
 /** O valor em cache, ou 0 quando a celula nao tem nenhum. */
@@ -120,8 +124,9 @@ function insertCell(row: string, ref: string): string {
 
   // Mesmo cuidado que em cellPattern: quantificador preguicoso antes da
   // alternativa, para uma celula "<c .../>" nao ser engolida ate ao "</c>" da
-  // celula seguinte.
-  const cells = [...row.matchAll(/<c[^>]*\br="([A-Z]+)\d+"[^>]*?(?:\/>|>.*?<\/c>)/gs)];
+  // celula seguinte. "[\s\S]" em vez de "." com a flag "s": essa flag exige
+  // target es2018+, e o resto da app compila para es2017.
+  const cells = [...row.matchAll(/<c[^>]*\br="([A-Z]+)\d+"[^>]*?(?:\/>|>[\s\S]*?<\/c>)/g)];
   const after = cells.find((m) => columnBefore(column, m[1]));
 
   if (after) {

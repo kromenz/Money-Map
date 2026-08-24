@@ -31,6 +31,9 @@ build/
 # alterna entre .next e .next-dev conforme o modo. Versiona-lo so sujava a
 # arvore a cada troca. E o mesmo que o create-next-app faz.
 frontend/next-env.d.ts
+# Gerados pelo servidor de desenvolvimento do Next (next dev), nao por nos.
+frontend/AGENTS.md
+frontend/CLAUDE.md
 .nuxt/
 out/
 .vuepress/dist
