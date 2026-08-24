@@ -24,6 +24,16 @@ coverage/
 dist/
 build/
 .next/
+# O modo de desenvolvimento escreve aqui, para nao contaminar o .next que o
+# next start serve (ver distDir no frontend/next.config.js).
+.next-dev/
+# Gerado pelo Next a cada arranque, e a referencia que ele escreve la dentro
+# alterna entre .next e .next-dev conforme o modo. Versiona-lo so sujava a
+# arvore a cada troca. E o mesmo que o create-next-app faz.
+frontend/next-env.d.ts
+# Gerados pelo servidor de desenvolvimento do Next (next dev), nao por nos.
+frontend/AGENTS.md
+frontend/CLAUDE.md
 .nuxt/
 out/
 .vuepress/dist
@@ -89,3 +99,12 @@ postgres-data/
 secrets/
 
 cache/
+
+docs/superpowers
+.superpowers/
+
+# Lancador: a fonte e o Money-Map.cmd mais o scripts/launcher.ps1, ambos
+# versionados. O .exe e o atalho sao artefactos gerados a partir deles -- ficam
+# de fora para nao haver duas versoes da mesma coisa, uma legivel e outra nao.
+*.exe
+*.lnk

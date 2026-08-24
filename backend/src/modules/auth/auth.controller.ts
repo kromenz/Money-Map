@@ -103,7 +103,7 @@ export const github: RequestHandler = async (req, res, next) => {
 export const githubCallback: RequestHandler = async (req, res, next) => {
   try {
     const code = req.query.code as string;
-    const debug = req.query.debug === "1"; // se quiseres testar sem redirect
+    const debug = req.query.debug === "1";
     const result = await service.githubCallback(code);
 
     console.log("GITHUB CALLBACK RESULT:", result);
@@ -120,5 +120,25 @@ export const githubCallback: RequestHandler = async (req, res, next) => {
     );
   } catch (err) {
     return next(err);
+  }
+};
+
+export const setPassword: RequestHandler = async (req, res, next) => {
+  try {
+    const userId = (req as any).userId;
+    if (!userId) {
+      res.status(401).json({ error: "Not authenticated" });
+      return;
+    }
+
+    const { password, currentPassword } = req.body;
+
+    const result = await service.setPassword(userId, password, currentPassword);
+
+    res.json(result);
+  } catch (err: any) {
+    const msg = err?.message || "Internal error";
+    const status = err?.status || 400;
+    res.status(status).json({ error: msg });
   }
 };

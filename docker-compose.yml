@@ -1,7 +1,7 @@
 services:
   db:
     container_name: db
-    image: "postgres"
+    image: "postgres:17"
     ports:
       - "5430:5432"
     env_file:
