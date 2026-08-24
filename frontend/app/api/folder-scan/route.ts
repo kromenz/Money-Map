@@ -16,6 +16,12 @@ export const runtime = "nodejs";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
 
+// Rotulo fixo para o campo "file" quando a falha e da propria pasta, nao de
+// um ficheiro la dentro -- nunca o caminho real. BUDGET_FOLDER nao tem o
+// prefixo NEXT_PUBLIC_ precisamente para nunca chegar ao browser, e o campo
+// "file" vai directo para FolderScanNotice, que o mostra tal e qual.
+const FOLDER_LABEL = "budget folder";
+
 // O varrimento corre uma vez por processo do Next -- e o que "uma vez por
 // arranque" quer dizer. Guardar tambem a promessa, e nao so o resultado, faz
 // com que dois separadores a abrir ao mesmo tempo esperem pelo mesmo trabalho
@@ -98,7 +104,9 @@ async function scan(folder: string, cookie: string): Promise<FolderScanResult> {
     // caminho absoluto embutido outra vez, e o campo file ja tem a pasta.
     return {
       imported: [],
-      failed: [{ file: folder, year: null, reason: "the configured folder could not be read" }],
+      failed: [
+        { file: FOLDER_LABEL, year: null, reason: "the configured folder could not be read" },
+      ],
     };
   }
 
@@ -180,7 +188,7 @@ export async function POST(request: Request) {
         status: "done",
         fromCache: false,
         imported: [],
-        failed: [{ file: folder, year: null, reason: "the API could not be reached" }],
+        failed: [{ file: FOLDER_LABEL, year: null, reason: "the API could not be reached" }],
       };
       return NextResponse.json(response);
     }
@@ -188,7 +196,9 @@ export async function POST(request: Request) {
       status: "done",
       fromCache: false,
       imported: [],
-      failed: [{ file: folder, year: null, reason: "the configured folder could not be read" }],
+      failed: [
+        { file: FOLDER_LABEL, year: null, reason: "the configured folder could not be read" },
+      ],
     };
     return NextResponse.json(response);
   } finally {

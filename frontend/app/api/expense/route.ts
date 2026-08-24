@@ -31,6 +31,10 @@ export async function POST(request: Request) {
   }
 
   const body = (await request.json().catch(() => null)) as Body | null;
+  // Duas casas: dinheiro. Arredonda-se antes de validar > 0, nao depois --
+  // 0.004 passava as duas verificacoes com a ordem trocada e o "+0" ficava
+  // escrito na formula da folha para sempre.
+  const amount = body ? Number(Number(body.amount).toFixed(2)) : NaN;
   if (
     !body ||
     !Number.isInteger(body.year) ||
@@ -39,14 +43,30 @@ export async function POST(request: Request) {
     body.month > 12 ||
     typeof body.name !== "string" ||
     body.name === "" ||
-    !(Number(body.amount) > 0)
+    !(amount > 0)
   ) {
     return bad("that expense is not valid");
   }
 
   const cookie = request.headers.get("cookie") ?? "";
-  // Duas casas: dinheiro. Sem isto, 12.505 entrava na formula tal e qual.
-  const amount = Number(Number(body.amount).toFixed(2));
+
+  async function respondPending(): Promise<Response> {
+    const queued = await queuePending(cookie, {
+      year: body.year,
+      month: body.month,
+      section: body.section,
+      group: body.group,
+      name: body.name,
+      amount: amount.toFixed(2),
+    });
+    if (!queued) return bad("could not save the expense as pending", 502);
+
+    return NextResponse.json({
+      status: "pending",
+      year: body.year,
+      count: await countPending(cookie),
+    } satisfies AddExpenseResponse);
+  }
 
   return withFolderLock(async () => {
     let locked: boolean;
@@ -62,23 +82,7 @@ export async function POST(request: Request) {
       throw err;
     }
 
-    if (locked) {
-      const queued = await queuePending(cookie, {
-        year: body.year,
-        month: body.month,
-        section: body.section,
-        group: body.group,
-        name: body.name,
-        amount: amount.toFixed(2),
-      });
-      if (!queued) return bad("could not save the expense as pending", 502);
-
-      return NextResponse.json({
-        status: "pending",
-        year: body.year,
-        count: await countPending(cookie),
-      } satisfies AddExpenseResponse);
-    }
+    if (locked) return respondPending();
 
     let written: Uint8Array;
     try {
@@ -99,7 +103,19 @@ export async function POST(request: Request) {
       return bad(`there is no readable sheet for ${body.year} in the budget folder`);
     }
 
-    const result = await writeYear(folder, body.year, written, cookie);
+    let result: { ok: true } | { ok: false; reason: string };
+    try {
+      result = await writeYear(folder, body.year, written, cookie);
+    } catch {
+      // O rename dentro de writeYear pode falhar com EPERM/EBUSY se o Excel
+      // abrir o ficheiro na janela entre o isLocked la em cima e agora -- um
+      // ExcelJS parse e um zip inteiro por reconstruir separam as duas
+      // verificacoes. Sem isto o erro escapava do withFolderLock sem guarda
+      // nenhuma: 500 opaco com o caminho absoluto la dentro em dev, e o gasto
+      // perdido em vez de enfileirado. Em vez disso trata-se como o mesmo
+      // caso do ficheiro trancado -- o gasto sobrevive como pendente.
+      return respondPending();
+    }
     // "=== false" e nao "!result.ok": sem strictNullChecks (tsconfig deste
     // projecto), a negacao nao estreita a uniao discriminada e o tsc reclama
     // que "reason" nao existe.

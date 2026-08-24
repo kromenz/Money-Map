@@ -34,13 +34,18 @@ export function AddExpenseBar({
 
   if (categories.length === 0) return null;
 
-  const value = Number(amount.replace(",", "."));
-  const ready = categoryId !== "" && value > 0 && !busy;
+  const normalizedAmount = amount.replace(",", ".");
+  const value = Number(normalizedAmount);
+  // Mais de duas casas decimais: a rota arredonda antes de escrever, mas
+  // arredondar em silencio aqui deixava o utilizador sem saber que o valor
+  // digitado nao e o que vai ficar na folha. Recusa-se em vez de arredondar.
+  const tooManyDecimals = /\.\d{3,}/.test(normalizedAmount);
+  const ready = categoryId !== "" && value > 0 && !tooManyDecimals && !busy;
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     const category = categories.find((c) => c.categoryId === categoryId);
-    if (!category || !(value > 0)) return;
+    if (!category || !(value > 0) || tooManyDecimals) return;
 
     setBusy(true);
     setError(null);
@@ -87,14 +92,19 @@ export function AddExpenseBar({
         ))}
       </select>
 
-      <Input
-        aria-label="Amount"
-        inputMode="decimal"
-        placeholder="12,50"
-        value={amount}
-        onChange={(e) => setAmount(e.target.value)}
-        className="w-28"
-      />
+      <div className="flex flex-col gap-1">
+        <Input
+          aria-label="Amount"
+          inputMode="decimal"
+          placeholder="12,50"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          className="w-28"
+        />
+        {tooManyDecimals && (
+          <p className="text-xs text-destructive">Use at most two decimal places</p>
+        )}
+      </div>
 
       <select
         aria-label="Month"

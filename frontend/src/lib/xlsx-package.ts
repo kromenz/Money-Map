@@ -13,6 +13,29 @@ const decode = (b: Uint8Array) => new TextDecoder().decode(b);
 const encode = (s: string) => new TextEncoder().encode(s);
 
 /**
+ * O workbook.xml nao tem exactamente uma folha.
+ *
+ * SHEET aponta sempre para xl/worksheets/sheet1.xml, e locateCells resolve a
+ * celula por wb.worksheets[0] -- a ordem dos separadores, via relacoes. Os
+ * dois coincidem hoje porque a folha so tem um separador, mas nada o garante:
+ * se um separador novo for acrescentado e ordenar primeiro, locateCells
+ * encontraria a celula numa folha e applyExpenses escrevia noutra parte do
+ * zip. A rede do import (verificacao de totais, 422 se nao baterem) apanhava
+ * isto sempre, mas so depois de gravar no disco. Falhar aqui, antes de tocar
+ * em nada, e mais cedo e mais claro.
+ */
+export class MultiSheetError extends Error {}
+
+function assertSingleWorksheet(workbookXml: string): void {
+  const count = (workbookXml.match(/<sheet\b/g) ?? []).length;
+  if (count !== 1) {
+    throw new MultiSheetError(
+      `O workbook tem ${count} folhas, esperava-se exactamente 1`
+    );
+  }
+}
+
+/**
  * O Excel recalcula tudo ao abrir.
  *
  * Depois de mexer numa celula, todos os valores em cache que dependem dela --
@@ -64,6 +87,8 @@ export async function applyExpenses(
 ): Promise<Uint8Array> {
   const files = unzipSync(file);
   if (!files[SHEET]) throw new Error("O .xlsx nao tem xl/worksheets/sheet1.xml");
+  if (!files[WORKBOOK]) throw new Error("O .xlsx nao tem xl/workbook.xml");
+  assertSingleWorksheet(decode(files[WORKBOOK]));
 
   const edits: Edit[] = [];
   for (const expense of expenses) {

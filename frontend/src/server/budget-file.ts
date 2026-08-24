@@ -1,6 +1,7 @@
 // So do lado servidor. Le e escreve em BUDGET_FOLDER, que nunca chega ao browser.
-import { readFile, writeFile, rename, copyFile, mkdir, open, access } from "node:fs/promises";
+import { readFile, writeFile, rename, copyFile, mkdir, open, access, unlink } from "node:fs/promises";
 import path from "node:path";
+import type { PendingExpense } from "@/types/expense";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
 const BACKUPS = ".backups";
@@ -38,6 +39,16 @@ export function withFolderLock<T>(fn: () => Promise<T>): Promise<T> {
  */
 export class SheetMissingError extends Error {}
 
+/** O ficheiro de bloqueio que o Excel cria ao lado da folha que tem aberta. */
+async function hasLockMarker(folder: string, year: number): Promise<boolean> {
+  try {
+    await access(path.join(folder, `~$${year}.xlsx`));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * O Excel tem a folha aberta?
  *
@@ -46,12 +57,7 @@ export class SheetMissingError extends Error {}
  * falhar por outra razao qualquer.
  */
 export async function isLocked(folder: string, year: number): Promise<boolean> {
-  try {
-    await access(path.join(folder, `~$${year}.xlsx`));
-    return true;
-  } catch {
-    // Sem ficheiro de bloqueio. Continua para a segunda verificacao.
-  }
+  if (await hasLockMarker(folder, year)) return true;
 
   try {
     const handle = await open(sheetPath(folder, year), "r+");
@@ -68,6 +74,18 @@ export async function isLocked(folder: string, year: number): Promise<boolean> {
     }
     return true;
   }
+}
+
+/**
+ * So faz sentido chamar depois de isLocked ja ter devolvido true: aqui so se
+ * decide se a explicacao a mostrar e "o Excel tem-na aberta" ou outra coisa
+ * qualquer -- um atributo so-de-leitura, uma ACL, um antivirus a segurar o
+ * ficheiro. Sem isto, qualquer bloqueio nao-Excel ficava indistinguivel do
+ * caso normal e o utilizador via "close Excel" para sempre, mesmo de olhos no
+ * Excel fechado.
+ */
+export async function isExcelLock(folder: string, year: number): Promise<boolean> {
+  return hasLockMarker(folder, year);
 }
 
 export async function readYear(folder: string, year: number): Promise<Uint8Array> {
@@ -103,8 +121,17 @@ export async function writeYear(
   // Escrita atomica: nunca existe um .xlsx meio escrito na pasta, nem por um
   // instante -- o que importa porque o varrimento pode estar a ler.
   const tmp = `${target}.tmp`;
-  await writeFile(tmp, bytes);
-  await rename(tmp, target);
+  try {
+    await writeFile(tmp, bytes);
+    await rename(tmp, target);
+  } catch (err) {
+    // O rename falha sobretudo quando o Excel abriu o ficheiro exactamente
+    // nesta janela, entre o isLocked e aqui. Sem isto o .tmp ficava orfao na
+    // pasta vigiada pelo varrimento. Melhor esforco: se o unlink tambem
+    // falhar, o erro original e que importa, nao este.
+    await unlink(tmp).catch(() => undefined);
+    throw err;
+  }
 
   const imported = await importYear(year, bytes, cookie);
   if (imported.ok) return { ok: true };
@@ -172,5 +199,36 @@ export async function countPending(cookie: string): Promise<number> {
     return data.pending.length;
   } catch {
     return 0;
+  }
+}
+
+/** Le a fila inteira do utilizador. Usa-se para agrupar por ano antes de aplicar. */
+export async function fetchPending(cookie: string): Promise<PendingExpense[]> {
+  try {
+    const res = await fetch(`${API_BASE}/budget/pending`, { headers: { cookie } });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { pending: PendingExpense[] };
+    return data.pending;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Apaga da fila por lista de ids, so depois de os pendentes terem sido
+ * aplicados. Devolve se a limpeza teve sucesso: o chamador tem de saber, senao
+ * um lote ja escrito na folha mas nao limpo fica marcado como aplicado por
+ * engano e a proxima montagem volta a escreve-lo.
+ */
+export async function clearPending(cookie: string, ids: string[]): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/budget/pending/clear`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    return res.ok;
+  } catch {
+    return false;
   }
 }

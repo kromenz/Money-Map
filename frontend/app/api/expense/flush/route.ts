@@ -3,32 +3,18 @@ import { applyExpenses } from "@/lib/xlsx-package";
 import { groupPendingByYear } from "@/lib/pending-plan";
 import {
   budgetFolder,
+  clearPending,
+  fetchPending,
+  isExcelLock,
   isLocked,
   readYear,
   SheetMissingError,
   withFolderLock,
   writeYear,
 } from "@/server/budget-file";
-import type { FlushResponse, PendingExpense } from "@/types/expense";
+import type { FlushResponse } from "@/types/expense";
 
 export const runtime = "nodejs";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
-
-async function fetchPending(cookie: string): Promise<PendingExpense[]> {
-  const res = await fetch(`${API_BASE}/budget/pending`, { headers: { cookie } });
-  if (!res.ok) return [];
-  const data = (await res.json()) as { pending: PendingExpense[] };
-  return data.pending;
-}
-
-async function clear(cookie: string, ids: string[]): Promise<void> {
-  await fetch(`${API_BASE}/budget/pending/clear`, {
-    method: "POST",
-    headers: { cookie, "content-type": "application/json" },
-    body: JSON.stringify({ ids }),
-  }).catch(() => undefined);
-}
 
 export async function POST(request: Request) {
   const folder = budgetFolder();
@@ -68,6 +54,17 @@ export async function POST(request: Request) {
 
       if (locked) {
         stillPending += batch.ids.length;
+        // O bloqueio pode nao ser o Excel: um atributo so-de-leitura, uma
+        // ACL, um antivirus. Sem esta distincao o utilizador ficava com
+        // "close Excel" para sempre mesmo de Excel fechado, sem forma de
+        // perceber porque. Quando o marcador do Excel esta presente o
+        // comportamento fica como estava -- sem entrada em failures.
+        if (!(await isExcelLock(folder, batch.year))) {
+          failures.push({
+            year: batch.year,
+            reason: `the sheet for ${batch.year} could not be opened, and Excel does not appear to have it open`,
+          });
+        }
         continue;
       }
 
@@ -87,7 +84,22 @@ export async function POST(request: Request) {
 
         // So depois de o import aceitar. Limpar antes perdia os gastos se o
         // import revertesse.
-        await clear(cookie, batch.ids);
+        const cleared = await clearPending(cookie, batch.ids);
+        if (!cleared) {
+          // A folha ja tem os gastos escritos -- o import aceitou. Mas os
+          // ids continuam na fila, por isso NAO contam como aplicados: se
+          // contassem, a proxima montagem via applyPending() voltava a
+          // escrever os mesmos gastos, duplicando-os em silencio na folha do
+          // utilizador. A razao fica bem distinta das outras para nao ser
+          // confundida com uma falha de escrita.
+          stillPending += batch.ids.length;
+          failures.push({
+            year: batch.year,
+            reason: `the sheet for ${batch.year} was updated but the pending queue could not be cleared afterwards — do not reapply, it would duplicate these expenses`,
+          });
+          continue;
+        }
+
         applied += batch.ids.length;
       } catch {
         stillPending += batch.ids.length;

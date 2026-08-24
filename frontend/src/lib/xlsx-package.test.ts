@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { unzipSync } from "fflate";
-import { applyExpenses } from "./xlsx-package";
+import { unzipSync, zipSync } from "fflate";
+import { applyExpenses, MultiSheetError } from "./xlsx-package";
 import { SheetTargetError } from "./sheet-locate";
 import { parseBudgetWorkbook } from "../../../backend/src/modules/budget/budget.parser";
 
@@ -302,6 +302,29 @@ describe("applyExpenses", () => {
     expect(sectionBefore).not.toBeNull();
     expect(sectionAfter).not.toBeNull();
     expect((sectionAfter as number) - (sectionBefore as number)).toBeCloseTo(12.5, 2);
+  });
+
+  it("recusa escrever quando o workbook tem mais de uma folha", async () => {
+    // Copia modificada da fixture: acrescenta um segundo <sheet> declarado no
+    // workbook.xml, sem tocar em mais nada. E o cenario que xlsx-package.ts
+    // hoje assume nunca acontecer -- SHEET aponta sempre para sheet1.xml,
+    // enquanto locateCells resolve por wb.worksheets[0]. Os dois so coincidem
+    // porque ha um separador so; isto simula deixar de ser verdade.
+    const files = unzipSync(bytes());
+    const workbookXml = new TextDecoder().decode(files["xl/workbook.xml"]);
+    expect(workbookXml).toContain('<sheet name="Personal Budget" sheetId="1" r:id="rId1"/>');
+
+    const withSecondSheet = workbookXml.replace(
+      '<sheet name="Personal Budget" sheetId="1" r:id="rId1"/>',
+      '<sheet name="Personal Budget" sheetId="1" r:id="rId1"/><sheet name="Extra" sheetId="2" r:id="rId99"/>'
+    );
+    expect(withSecondSheet).not.toBe(workbookXml);
+    files["xl/workbook.xml"] = new TextEncoder().encode(withSecondSheet);
+
+    const target = await firstExpenseCategory();
+    await expect(
+      applyExpenses(zipSync(files), [{ ...target, month: 3, amount: 12.5 }])
+    ).rejects.toThrow(MultiSheetError);
   });
 
   it("propaga o erro de uma categoria que nao existe", async () => {

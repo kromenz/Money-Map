@@ -26,6 +26,7 @@ import { categoryDeltas } from "../../src/lib/category-deltas";
 import { MONTH_LABELS } from "../../src/lib/format";
 import type { ImportResult } from "../../src/types/budget";
 import type { FolderScanFailure } from "../../src/types/folder-scan";
+import type { FlushResponse } from "../../src/types/expense";
 
 export default function DashboardPage() {
   const { user, loading } = useRequireAuth("/");
@@ -43,6 +44,7 @@ export default function DashboardPage() {
   const [folderFailures, setFolderFailures] = useState<FolderScanFailure[]>([]);
   const [scanning, setScanning] = useState(false);
   const [pending, setPending] = useState(0);
+  const [pendingFailures, setPendingFailures] = useState<FlushResponse["failures"]>([]);
   const [flushing, setFlushing] = useState(false);
 
   // isPending cobre pending+fetching, pending+paused (offline) e
@@ -84,6 +86,7 @@ export default function DashboardPage() {
     try {
       const result = await flushPending();
       setPending(result.stillPending);
+      setPendingFailures(result.failures);
       if (result.applied > 0) {
         await queryClient.invalidateQueries({ queryKey: ["budget-grid"] });
       }
@@ -167,15 +170,44 @@ export default function DashboardPage() {
 
     if (isPending) return <DashboardSkeleton />;
 
+    // PendingNotice e AddExpenseBar acima de todos os ramos que se seguem: a
+    // fila de pendentes nao depende do ano em vista, e num ano com categorias
+    // mas sem movimento -- o caso de Janeiro de qualquer ano -- o utilizador
+    // tem de conseguir registar o primeiro gasto do ano mesmo assim.
+    // AddExpenseBar ja se esconde sozinho sem categorias de despesa (rows
+    // vazio inclusive), por isso passar data?.rows tal e qual e seguro mesmo
+    // nos ramos de erro e vazio.
+    const bar = (
+      <>
+        <PendingNotice
+          count={pending}
+          busy={flushing}
+          onApply={applyPending}
+          failures={pendingFailures}
+        />
+        <AddExpenseBar
+          year={year}
+          rows={data?.rows ?? []}
+          onWritten={() => {
+            void queryClient.invalidateQueries({ queryKey: ["budget-grid", year] });
+          }}
+          onPending={setPending}
+        />
+      </>
+    );
+
     // Uma falha no carregamento nao pode deixar o utilizador sem forma de
     // importar -- a zona fica ao lado do erro, tal como no caminho feliz.
     if (isError) {
       return (
-        <div className="flex flex-wrap items-start gap-6">
-          {dropZone}
-          <p className="text-destructive">
-            Could not load the dashboard: {error.message}
-          </p>
+        <div className="space-y-6">
+          {bar}
+          <div className="flex flex-wrap items-start gap-6">
+            {dropZone}
+            <p className="text-destructive">
+              Could not load the dashboard: {error.message}
+            </p>
+          </div>
         </div>
       );
     }
@@ -185,11 +217,14 @@ export default function DashboardPage() {
     // para o componente que agora esta aqui.
     if (!data || data.rows.length === 0) {
       return (
-        <ImportWorkbook
-          year={year}
-          onImportStart={() => setReport(null)}
-          onImported={handleImported}
-        />
+        <div className="space-y-6">
+          {bar}
+          <ImportWorkbook
+            year={year}
+            onImportStart={() => setReport(null)}
+            onImported={handleImported}
+          />
+        </div>
       );
     }
 
@@ -199,13 +234,16 @@ export default function DashboardPage() {
     // a "Full table" logo abaixo mostra a estrutura toda.
     if (activeMonth === null || !metrics || !detail) {
       return (
-        <div className="flex flex-wrap items-start gap-6">
-          {dropZone}
-          <div className="min-w-0 flex-1 rounded-lg border p-8 text-center">
-            <p className="font-medium">No movement in {year}</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              The categories are imported, but no month has any amounts yet.
-            </p>
+        <div className="space-y-6">
+          {bar}
+          <div className="flex flex-wrap items-start gap-6">
+            {dropZone}
+            <div className="min-w-0 flex-1 rounded-lg border p-8 text-center">
+              <p className="font-medium">No movement in {year}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                The categories are imported, but no month has any amounts yet.
+              </p>
+            </div>
           </div>
         </div>
       );
@@ -213,16 +251,7 @@ export default function DashboardPage() {
 
     return (
       <div className="space-y-6">
-        <PendingNotice count={pending} busy={flushing} onApply={applyPending} />
-
-        <AddExpenseBar
-          year={year}
-          rows={data.rows}
-          onWritten={() => {
-            void queryClient.invalidateQueries({ queryKey: ["budget-grid", year] });
-          }}
-          onPending={setPending}
-        />
+        {bar}
 
         {/* A faixa do ano: o resumo centrado com a largura toda, e o grafico
             por baixo. Importar vive na pasta e no botao do cabecalho. */}
