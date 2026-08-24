@@ -42,8 +42,35 @@ async function firstExpenseCategory() {
   return c;
 }
 
+/**
+ * O inverso de firstExpenseCategory: uma categoria de despesas cujo grupo NAO
+ * tem subtotal em checksums.groups -- ou seja, groupSubtotal e null por
+ * design, nao por falta de procura. Serve para testar o outro lado do "if
+ * (found.groupSubtotal)" em applyExpenses: que um subtotal ausente e
+ * ignorado em silencio, e nao rebenta o pedido inteiro.
+ */
+async function firstNullSubtotalExpenseCategory() {
+  const parsed = await parseBudgetWorkbook(Buffer.from(bytes()), 2026);
+
+  const groupsWithChecksum = new Set(
+    Object.keys(parsed.checksums.groups)
+      .filter((key) => key.startsWith("expenses/"))
+      .map((key) => key.slice("expenses/".length))
+  );
+
+  const c = parsed.categories.find(
+    (x) => x.section === "expenses" && x.group !== "" && !groupsWithChecksum.has(x.group)
+  );
+  if (!c) {
+    throw new Error(
+      "a fixture nao tem uma despesa num grupo sem subtotal registado em checksums.groups"
+    );
+  }
+  return c;
+}
+
 describe("applyExpenses", () => {
-  it("preserva todas as partes excepto as tres que muda", async () => {
+  it("preserva todas as partes excepto as quatro que muda", async () => {
     const before = unzipSync(bytes());
     const target = await firstExpenseCategory();
 
@@ -56,7 +83,8 @@ describe("applyExpenses", () => {
         name !== "xl/worksheets/sheet1.xml" &&
         name !== "xl/workbook.xml" &&
         name !== "xl/calcChain.xml" &&
-        name !== "[Content_Types].xml"
+        name !== "[Content_Types].xml" &&
+        name !== "xl/_rels/workbook.xml.rels"
     );
 
     for (const name of untouched) {
@@ -93,6 +121,30 @@ describe("applyExpenses", () => {
 
     const types = new TextDecoder().decode(after["[Content_Types].xml"]);
     expect(types).not.toContain("calcChain");
+  });
+
+  it("remove a Relationship do calcChain sem tocar nas outras", async () => {
+    // Sem isto o zip fica com uma Relationship a apontar para um
+    // calcChain.xml que ja nao existe -- uma violacao do OPC que o Excel
+    // apanha ao abrir e mostra como "encontramos um problema com algum
+    // conteudo".
+    const before = unzipSync(bytes());
+    const target = await firstExpenseCategory();
+    const after = unzipSync(
+      await applyExpenses(bytes(), [{ ...target, month: 3, amount: 12.5 }])
+    );
+
+    const relsBefore = new TextDecoder().decode(before["xl/_rels/workbook.xml.rels"]);
+    const relsAfter = new TextDecoder().decode(after["xl/_rels/workbook.xml.rels"]);
+
+    expect(relsBefore).toContain("calcChain");
+    expect(relsAfter).not.toContain("calcChain");
+
+    // As outras relacoes continuam la, incluindo a da propria folha.
+    expect(relsAfter).toContain("worksheets/sheet1.xml");
+    expect(relsAfter).toContain("sharedStrings.xml");
+    expect(relsAfter).toContain("styles.xml");
+    expect(relsAfter).toContain("theme/theme1.xml");
   });
 
   it("poe fullCalcOnLoad sem perder o calcId", async () => {
@@ -213,6 +265,43 @@ describe("applyExpenses", () => {
       )?.sheetValue ?? 0;
 
     expect(find(after) - find(before)).toBeCloseTo(12.5, 2);
+  });
+
+  it("escreve numa categoria sem subtotal de grupo (Home) sem falhar", async () => {
+    // O grupo Home tem subtotal zero em todos os meses, e o Excel omite o
+    // valor em cache de uma formula cujo resultado e zero -- por isso essa
+    // linha nao tem <v> na folha, o parser nunca a regista em
+    // checksums.groups, e locateCells devolve groupSubtotal: null para
+    // qualquer categoria dentro dele. Isto e comportamento deliberado, nao
+    // um buraco: applyExpenses tem de saltar esse subtotal em silencio (o
+    // "if (found.groupSubtotal)"), e nao rebentar o pedido so porque um
+    // grupo nao tem nada para comparar.
+    const target = await firstNullSubtotalExpenseCategory();
+    expect(target.group).toBe("Home");
+
+    const written = await applyExpenses(bytes(), [
+      { ...target, month: 3, amount: 12.5 },
+    ]);
+
+    const before = await parseBudgetWorkbook(Buffer.from(bytes()), 2026);
+    const after = await parseBudgetWorkbook(Buffer.from(written), 2026);
+
+    const findCell = (p: typeof before) =>
+      p.cells.find(
+        (c) =>
+          c.section === target.section &&
+          c.group === target.group &&
+          c.name === target.name &&
+          c.month === 3
+      )?.sheetValue ?? 0;
+
+    expect(findCell(after) - findCell(before)).toBeCloseTo(12.5, 2);
+
+    const sectionBefore = before.checksums.sections.expenses.months[3 - 1];
+    const sectionAfter = after.checksums.sections.expenses.months[3 - 1];
+    expect(sectionBefore).not.toBeNull();
+    expect(sectionAfter).not.toBeNull();
+    expect((sectionAfter as number) - (sectionBefore as number)).toBeCloseTo(12.5, 2);
   });
 
   it("propaga o erro de uma categoria que nao existe", async () => {

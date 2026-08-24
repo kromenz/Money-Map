@@ -7,6 +7,7 @@ const SHEET = "xl/worksheets/sheet1.xml";
 const WORKBOOK = "xl/workbook.xml";
 const CALC_CHAIN = "xl/calcChain.xml";
 const CONTENT_TYPES = "[Content_Types].xml";
+const WORKBOOK_RELS = "xl/_rels/workbook.xml.rels";
 
 const decode = (b: Uint8Array) => new TextDecoder().decode(b);
 const encode = (s: string) => new TextEncoder().encode(s);
@@ -38,11 +39,24 @@ function dropCalcChain(types: string): string {
 }
 
 /**
+ * O workbook.xml.rels tem uma Relationship a apontar para o calcChain.xml que
+ * acabamos de apagar. Deixa-la la e uma referencia pendente -- viola o OPC e e
+ * o gatilho classico do aviso "encontramos um problema com algum conteudo" do
+ * Excel ao abrir. O match e pelo Type, nao pelo Id: o Id (ex.: rId6) e
+ * incidental a este workbook e pode ser outro noutro ficheiro. Sem
+ * calcChain.xml no zip nao ha nenhuma Relationship a apagar, e a funcao nao
+ * mexe em mais nada -- os outros ids nao precisam de ser contiguos.
+ */
+function dropCalcChainRel(rels: string): string {
+  return rels.replace(/<Relationship[^>]*Type="[^"]*\/calcChain"[^>]*\/>/g, "");
+}
+
+/**
  * Escreve os gastos na folha e devolve os bytes do .xlsx novo.
  *
- * Todas as partes do zip que nao sejam a folha, o workbook, o calcChain e o
- * Content_Types saem exactamente como entraram -- em particular os dois
- * graficos, que uma regravacao com ExcelJS destruiria.
+ * Todas as partes do zip que nao sejam a folha, o workbook, o calcChain, o
+ * Content_Types e o workbook.xml.rels saem exactamente como entraram -- em
+ * particular os dois graficos, que uma regravacao com ExcelJS destruiria.
  */
 export async function applyExpenses(
   file: Uint8Array,
@@ -70,6 +84,9 @@ export async function applyExpenses(
   if (files[WORKBOOK]) files[WORKBOOK] = encode(withFullCalc(decode(files[WORKBOOK])));
   if (files[CONTENT_TYPES]) {
     files[CONTENT_TYPES] = encode(dropCalcChain(decode(files[CONTENT_TYPES])));
+  }
+  if (files[WORKBOOK_RELS]) {
+    files[WORKBOOK_RELS] = encode(dropCalcChainRel(decode(files[WORKBOOK_RELS])));
   }
   delete files[CALC_CHAIN];
 
