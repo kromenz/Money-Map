@@ -85,7 +85,11 @@ export function OrdersTable() {
 
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>
-          {data ? `${offset + 1}–${Math.min(offset + PAGE, data.total)} de ${data.total}` : ""}
+          {data
+            ? data.total === 0
+              ? "Sem ordens"
+              : `${offset + 1}–${Math.min(offset + PAGE, data.total)} de ${data.total}`
+            : ""}
         </span>
         <div className="flex gap-2">
           <button type="button" disabled={offset === 0} onClick={() => setOffset((o) => Math.max(0, o - PAGE))} className="rounded-md border px-2 py-1 disabled:opacity-40">

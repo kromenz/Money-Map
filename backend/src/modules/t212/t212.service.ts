@@ -3,7 +3,7 @@ import { prisma } from "../../db/prisma";
 import { loadT212Config } from "./t212.config";
 import { investedSeries, type InvestedEvent } from "./t212.invested";
 import { mergeChart, type ChartPoint } from "./t212.chart";
-import { derivedCutoff } from "./t212.bridge";
+import { derivedCutoff, crossesToBudget } from "./t212.bridge";
 import { prismaRepo } from "./t212.repo";
 import { toHoldingViews, toStatusViews, type HoldingView, type StatusView } from "./t212.view";
 
@@ -146,7 +146,12 @@ export async function getOrders(
 }
 
 export async function getCashFlows(userId: string, opts: { limit: number; offset: number }) {
-  const [rows, total] = await Promise.all([
+  const cfg = loadT212Config();
+
+  // O corte calcula-se uma vez, fora do ciclo: e o mesmo para todos os itens
+  // desta pagina, e repetir a consulta ao Excel por linha so multiplicava
+  // trabalho sem mudar a resposta.
+  const [rows, total, lastExcel] = await Promise.all([
     prisma.brokerCashFlow.findMany({
       where: { userId },
       orderBy: { dateTime: "desc" },
@@ -154,16 +159,22 @@ export async function getCashFlows(userId: string, opts: { limit: number; offset
       skip: opts.offset,
     }),
     prisma.brokerCashFlow.count({ where: { userId } }),
+    prismaRepo.lastExcelMonth(userId),
   ]);
+  const cutoff = cfg.bridgeFrom ?? derivedCutoff(lastExcel);
 
   return {
     total,
-    items: rows.map((r) => ({
-      externalId: r.externalId,
-      dateTime: r.dateTime.toISOString(),
-      type: r.type,
-      amount: r.amount.toFixed(2),
-      currency: r.currency,
-    })),
+    items: rows.map((r) => {
+      const date = r.dateTime.toISOString().slice(0, 10);
+      return {
+        externalId: r.externalId,
+        dateTime: r.dateTime.toISOString(),
+        type: r.type,
+        amount: r.amount.toFixed(2),
+        currency: r.currency,
+        crossesBudget: crossesToBudget(r.type, date, cutoff),
+      };
+    }),
   };
 }

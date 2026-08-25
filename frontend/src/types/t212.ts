@@ -71,6 +71,7 @@ export type CashFlowItem = {
   type: string;
   amount: string;
   currency: string;
+  crossesBudget: boolean;
 };
 
 export type StageReport = {

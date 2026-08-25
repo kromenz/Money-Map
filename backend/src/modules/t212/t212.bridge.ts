@@ -65,6 +65,24 @@ export function derivedCutoff(
   return `${year}-${String(month).padStart(2, "0")}-01`;
 }
 
+/**
+ * Fonte unica da regra "este movimento de caixa entra no orcamento". O
+ * bridgeRows usa-a para decidir o que escrever na folha, e a rota
+ * GET /t212/cashflows usa-a para anotar cada item com crossesBudget -- a
+ * interface le a resposta, nunca copia esta expressao para o frontend.
+ */
+export function crossesToBudget(
+  type: CashFlowKind,
+  date: string,
+  cutoff: string | null
+): boolean {
+  // FEE nao atravessa: a taxa ja esta reflectida no valor da execucao, e
+  // conta-la outra vez duplicava a despesa. TRANSFER e ambiguo na API --
+  // regista-se, mas nao se interpreta.
+  if (type === "FEE" || type === "TRANSFER") return false;
+  return cutoff === null || date >= cutoff;
+}
+
 export function bridgeRows(
   source: BridgeSource,
   cutoff: string | null
@@ -74,12 +92,7 @@ export function bridgeRows(
 
   for (const c of source.cashflows) {
     const date = day(c.dateTime);
-    if (!after(date)) continue;
-
-    // FEE nao atravessa: a taxa ja esta reflectida no valor da execucao, e
-    // conta-la outra vez duplicava a despesa. TRANSFER e ambiguo na API --
-    // regista-se, mas nao se interpreta.
-    if (c.type === "FEE" || c.type === "TRANSFER") continue;
+    if (!crossesToBudget(c.type, date, cutoff)) continue;
 
     const income =
       c.type === "INTEREST_ON_FREE_CASH" || c.type === "LENDING_INTEREST";

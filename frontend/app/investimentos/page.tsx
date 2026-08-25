@@ -110,7 +110,7 @@ export default function InvestimentosPage() {
 
           <DividendsPanel />
           <OrdersTable />
-          <CashFlowTable cutoff={data.cutoff} />
+          <CashFlowTable />
 
           {syncError ? (
             <p className="text-xs text-destructive" title={syncError.detail}>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { bridgeRows, reconcilePlan, derivedCutoff, BRIDGE_PREFIX } from "./t212.bridge";
+import { bridgeRows, reconcilePlan, derivedCutoff, crossesToBudget, BRIDGE_PREFIX } from "./t212.bridge";
 
 const cashflow = (externalId: string, dateTime: string, type: string, amount: string) =>
   ({ externalId, dateTime, type, amount } as never);
@@ -59,6 +59,28 @@ describe("bridgeRows", () => {
 
   it("todos os externalId levam o prefixo -- e o que os torna reversiveis", () => {
     expect(bridgeRows(source, null).every((r) => r.externalId.startsWith(BRIDGE_PREFIX))).toBe(true);
+  });
+});
+
+describe("crossesToBudget", () => {
+  it("os dois tipos de juros atravessam", () => {
+    expect(crossesToBudget("INTEREST_ON_FREE_CASH", "2026-09-13", null)).toBe(true);
+    expect(crossesToBudget("LENDING_INTEREST", "2026-09-13", null)).toBe(true);
+  });
+
+  it("taxa e transferencia nao atravessam", () => {
+    expect(crossesToBudget("FEE", "2026-09-13", null)).toBe(false);
+    expect(crossesToBudget("TRANSFER", "2026-09-13", null)).toBe(false);
+  });
+
+  it("um deposito anterior ao corte nao atravessa", () => {
+    expect(crossesToBudget("DEPOSIT", "2026-09-01", "2026-09-12")).toBe(false);
+  });
+
+  it("sem corte definido atravessa tudo o que nao seja taxa nem transferencia", () => {
+    expect(crossesToBudget("DEPOSIT", "2020-01-01", null)).toBe(true);
+    expect(crossesToBudget("WITHDRAW", "2020-01-01", null)).toBe(true);
+    expect(crossesToBudget("INTEREST_ON_FREE_CASH", "2020-01-01", null)).toBe(true);
   });
 });
 

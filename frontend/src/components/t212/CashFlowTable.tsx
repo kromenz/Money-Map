@@ -18,9 +18,11 @@ const LABELS: Record<string, string> = {
 
 /**
  * A marca do corte esta aqui e nao so no aviso do topo: e nesta tabela que se
- * procura um deposito especifico quando a grelha do orcamento nao bate.
+ * procura um deposito especifico quando a grelha do orcamento nao bate. O
+ * "atravessa" em si vem de crossesBudget no servidor -- a mesma regra que o
+ * bridgeRows usa para escrever a folha, nao uma copia local.
  */
-export function CashFlowTable({ cutoff }: { cutoff: string | null }) {
+export function CashFlowTable() {
   const [offset, setOffset] = useState(0);
 
   const { data } = useQuery({
@@ -43,30 +45,27 @@ export function CashFlowTable({ cutoff }: { cutoff: string | null }) {
             </tr>
           </thead>
           <tbody>
-            {(data?.items ?? []).map((c) => {
-              const day = c.dateTime.slice(0, 10);
-              const crosses =
-                (c.type === "DEPOSIT" || c.type === "WITHDRAW") &&
-                (cutoff === null || day >= cutoff);
-
-              return (
-                <tr key={c.externalId} className="border-b last:border-0">
-                  <td className="px-2 py-2">{day}</td>
-                  <td className="px-2 py-2">{LABELS[c.type] ?? c.type}</td>
-                  <td className="px-2 py-2 text-right tabular-nums">{formatEur(Number(c.amount))}</td>
-                  <td className="px-2 py-2 text-xs text-muted-foreground">
-                    {crosses ? "Sim" : "Nao"}
-                  </td>
-                </tr>
-              );
-            })}
+            {(data?.items ?? []).map((c) => (
+              <tr key={c.externalId} className="border-b last:border-0">
+                <td className="px-2 py-2">{c.dateTime.slice(0, 10)}</td>
+                <td className="px-2 py-2">{LABELS[c.type] ?? c.type}</td>
+                <td className="px-2 py-2 text-right tabular-nums">{formatEur(Number(c.amount))}</td>
+                <td className="px-2 py-2 text-xs text-muted-foreground">
+                  {c.crossesBudget ? "Sim" : "Nao"}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
 
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>
-          {data ? `${offset + 1}–${Math.min(offset + PAGE, data.total)} de ${data.total}` : ""}
+          {data
+            ? data.total === 0
+              ? "Sem movimentos"
+              : `${offset + 1}–${Math.min(offset + PAGE, data.total)} de ${data.total}`
+            : ""}
         </span>
         <div className="flex gap-2">
           <button type="button" disabled={offset === 0} onClick={() => setOffset((o) => Math.max(0, o - PAGE))} className="rounded-md border px-2 py-1 disabled:opacity-40">
