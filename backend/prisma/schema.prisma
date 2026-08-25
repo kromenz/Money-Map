@@ -20,6 +20,12 @@ model User {
   transactions  Transaction[]
   rules         Rule[]
   pendingExpenses PendingExpense[]
+  holdings        Holding[]
+  snapshots       PortfolioSnapshot[]
+  brokerOrders    BrokerOrder[]
+  brokerDividends BrokerDividend[]
+  brokerCashFlows BrokerCashFlow[]
+  syncStates      SyncState[]
 }
 
 enum AuthProvider {
@@ -145,4 +151,145 @@ model PendingExpense {
   createdAt DateTime @default(now())
 
   @@index([userId, year])
+}
+
+enum BrokerSide {
+  BUY
+  SELL
+}
+
+enum CashFlowType {
+  DEPOSIT
+  WITHDRAW
+  FEE
+  TRANSFER
+  INTEREST_ON_FREE_CASH
+  LENDING_INTEREST
+}
+
+enum SyncKind {
+  summary
+  positions
+  orders
+  dividends
+  transactions
+}
+
+/// A carteira de agora, nao um historico: reescrita inteira a cada sync.
+/// O historico vive no PortfolioSnapshot.
+model Holding {
+  id               String   @id @default(uuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticker           String
+  name             String   @default("")
+  currency         String   @default("")
+  quantity         Decimal  @db.Decimal(18, 8)
+  averagePricePaid Decimal  @db.Decimal(18, 8)
+  currentPrice     Decimal  @db.Decimal(18, 8)
+  currentValue     Decimal  @db.Decimal(12, 2)
+  totalCost        Decimal  @db.Decimal(12, 2)
+  unrealizedPl     Decimal  @db.Decimal(12, 2)
+  fxImpact         Decimal  @db.Decimal(12, 2)
+  syncedAt         DateTime @default(now())
+
+  @@unique([userId, ticker])
+}
+
+/// Uma linha por dia medido. Um dia sem linha e um dia em que a app nao correu
+/// -- e o grafico desenha a lacuna em vez de a interpolar.
+model PortfolioSnapshot {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date         DateTime @db.Date
+  cash         Decimal  @db.Decimal(12, 2)
+  invested     Decimal  @db.Decimal(12, 2)
+  marketValue  Decimal  @db.Decimal(12, 2)
+  totalValue   Decimal  @db.Decimal(12, 2)
+  realizedPl   Decimal  @db.Decimal(12, 2)
+  unrealizedPl Decimal  @db.Decimal(12, 2)
+  createdAt    DateTime @default(now())
+
+  @@unique([userId, date])
+}
+
+/// Uma linha por execucao, nao por ordem: uma ordem pode encher em varias
+/// execucoes com precos diferentes. Dai o externalId ser orderId:fillId.
+model BrokerOrder {
+  userId        String
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String     @id @default(uuid())
+  externalId    String
+  filledAt      DateTime
+  ticker        String
+  side          BrokerSide
+  orderType     String     @default("")
+  quantity      Decimal    @db.Decimal(18, 8)
+  price         Decimal    @db.Decimal(18, 8)
+  netValue      Decimal    @db.Decimal(12, 2)
+  fxRate        Decimal?   @db.Decimal(18, 8)
+  taxes         Json?
+  initiatedFrom String     @default("")
+  status        String     @default("")
+  createdAt     DateTime   @default(now())
+
+  @@unique([userId, externalId])
+  @@index([userId, filledAt])
+}
+
+model BrokerDividend {
+  id                  String   @id @default(uuid())
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  externalId          String
+  paidOn              DateTime
+  ticker              String
+  quantity            Decimal  @db.Decimal(18, 8)
+  grossAmountPerShare Decimal  @db.Decimal(18, 8)
+  amount              Decimal  @db.Decimal(12, 2)
+  currency            String   @default("")
+  amountInEuro        Decimal  @db.Decimal(12, 2)
+  type                String   @default("")
+  createdAt           DateTime @default(now())
+
+  @@unique([userId, externalId])
+  @@index([userId, paidOn])
+}
+
+model BrokerCashFlow {
+  id         String       @id @default(uuid())
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  externalId String
+  dateTime   DateTime
+  type       CashFlowType
+  amount     Decimal      @db.Decimal(12, 2)
+  currency   String       @default("")
+  createdAt  DateTime     @default(now())
+
+  @@unique([userId, externalId])
+  @@index([userId, dateTime])
+}
+
+/// Duas modalidades, e o backfillDone e o que as separa.
+///
+/// Enquanto o backfill nao acabou, percorre-se ate ao fim do historico e o
+/// backfillCursor marca ate onde se foi, para uma interrupcao nao obrigar a
+/// recomecar. Depois de acabado, passa-se a parar no primeiro item conhecido.
+///
+/// Sem esta distincao o backfill interrompido nunca se completava: as paginas
+/// vem da mais recente para tras, e a corrida seguinte parava logo na primeira.
+model SyncState {
+  id             String    @id @default(uuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind           SyncKind
+  backfillDone   Boolean   @default(false)
+  backfillCursor String?
+  lastRunAt      DateTime?
+  lastError      String?
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([userId, kind])
 }
