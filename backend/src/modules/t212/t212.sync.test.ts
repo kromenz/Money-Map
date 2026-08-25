@@ -181,6 +181,9 @@ describe("syncAll", () => {
     const history = report.stages.filter((s) =>
       ["orders", "dividends", "transactions"].includes(s.kind)
     );
+    // Sem isto, um "kind" renomeado esvaziava o filtro e o every() seguinte
+    // passava vazio -- o teste deixava de testar seja o que for.
+    expect(history).toHaveLength(3);
     expect(history.every((s) => s.written === 0)).toBe(true);
     expect(report.stages.every((s) => s.ok)).toBe(true);
   });
@@ -260,5 +263,113 @@ describe("syncAll", () => {
 
     const plan = applyBridge.mock.calls[0][1] as { toCreate: { externalId: string }[] };
     expect(plan.toCreate.map((r) => r.externalId)).toEqual(["t212:depois"]);
+  });
+
+  it("nao substitui a carteira quando todos os itens saltaram no Zod", async () => {
+    // Um campo renomeado pela T212 faz todos os itens saltar no parse. Antes
+    // desta guarda, replaceHoldings([]) apagava a carteira real e a etapa
+    // ainda reportava ok:true -- uma carteira desactualizada e muito melhor
+    // do que uma carteira apagada.
+    const repo = fakeRepo();
+    const client = {
+      request: vi.fn(async (path: string) => {
+        if (path.includes("summary")) return summary;
+        if (path.includes("positions")) return [{ campo: "renomeado" }];
+        throw new Error(`caminho inesperado: ${path}`);
+      }),
+      paginate: fakeClient({}).paginate,
+    };
+
+    const report = await syncAll("u1", deps(client as unknown as ReturnType<typeof fakeClient>, repo));
+    const positions = report.stages.find((s) => s.kind === "positions")!;
+
+    expect(positions.ok).toBe(false);
+    expect(positions.error).toBeTruthy();
+    expect(repo.replaceHoldings).not.toHaveBeenCalled();
+  });
+
+  it("falha a etapa quando a paginacao para sem chegar ao fim do historico", async () => {
+    // Simula o guarda contra ciclos do cliente real (t212.client.ts): a pagina
+    // seguinte nunca chega a nextPagePath:null porque o gerador parou por
+    // repetir um caminho ja visto. Sem esta deteccao, backfillDone fica falso
+    // para sempre e cada corrida volta a reler o historico em silencio.
+    const repo = fakeRepo({
+      getState: vi.fn(async () => ({ backfillDone: false, backfillCursor: null })),
+    });
+    const client = {
+      request: vi.fn(async (path: string) => {
+        if (path.includes("summary")) return summary;
+        if (path.includes("positions")) return [position];
+        throw new Error(`caminho inesperado: ${path}`);
+      }),
+      paginate: async function* (path: string) {
+        if (!path.includes("orders")) {
+          yield { items: [], nextPagePath: null };
+          return;
+        }
+        yield { items: [orderItem(1, 1)], nextPagePath: "/p?cursor=1" };
+        // O gerador para aqui, tal como o guarda contra ciclos faria -- nunca
+        // produz nextPagePath:null.
+      },
+    };
+
+    const report = await syncAll("u1", deps(client as unknown as ReturnType<typeof fakeClient>, repo));
+    const orders = report.stages.find((s) => s.kind === "orders")!;
+
+    expect(orders.ok).toBe(false);
+    expect(orders.error).toContain("paginacao terminou sem chegar ao fim do historico");
+  });
+
+  it("um setState que rejeita nao impede as etapas seguintes de correr", async () => {
+    // O fakeRepo por omissao nunca rejeita, portanto o .catch(() => undefined)
+    // do stage() nunca era exercitado -- e e exactamente a invariante que
+    // garante que uma falha ao gravar estado nao trava a sincronizacao.
+    const repo = fakeRepo({
+      setState: vi.fn(async () => {
+        throw new Error("syncstate indisponivel");
+      }),
+    });
+    const client = fakeClient({
+      orders: [[orderItem(1, 1)]],
+      dividends: [[dividendItem("d1")]],
+      transactions: [[cashItem("c1")]],
+    });
+
+    const report = await syncAll("u1", deps(client, repo));
+
+    expect(report.stages).toHaveLength(6);
+    expect(report.stages.find((s) => s.kind === "orders")!.written).toBe(1);
+    expect(report.stages.find((s) => s.kind === "dividends")!.written).toBe(1);
+    expect(report.stages.find((s) => s.kind === "transactions")!.written).toBe(1);
+    expect(report.stages.find((s) => s.kind === "bridge")!.ok).toBe(true);
+  });
+
+  it("a etapa bridge nao chama setState -- 'bridge' nao existe no enum SyncKind da base", async () => {
+    const setState = vi.fn(async () => {});
+    const repo = fakeRepo({ setState });
+    const client = fakeClient({});
+
+    await syncAll("u1", deps(client, repo));
+
+    expect(setState).not.toHaveBeenCalledWith("u1", "bridge", expect.anything());
+  });
+
+  it("reporta os apagados da ponte, nao so os criados", async () => {
+    // written:0, ok:true escondia quarenta transaccoes apagadas -- indistinguivel
+    // de a ponte nao ter feito nada.
+    const applyBridge = vi.fn(
+      async (_userId: string, _plan: { toDelete: string[]; toCreate: unknown[] }) => ({
+        created: 0,
+        deleted: 40,
+      })
+    );
+    const repo = fakeRepo({ applyBridge });
+    const client = fakeClient({});
+
+    const report = await syncAll("u1", deps(client, repo));
+    const bridge = report.stages.find((s) => s.kind === "bridge")!;
+
+    expect(bridge.deleted).toBe(40);
+    expect(bridge.written).toBe(0);
   });
 });

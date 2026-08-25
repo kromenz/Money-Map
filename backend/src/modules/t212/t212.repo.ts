@@ -1,9 +1,26 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import type { SyncRepo } from "./t212.sync";
+import { BRIDGE_PREFIX } from "./t212.bridge";
 
 /** Dinheiro chega aqui em string e vira Decimal. Nunca passa por um float. */
 const dec = (v: string) => new Prisma.Decimal(v);
+
+/**
+ * O omisso do Prisma para uma transaccao interactiva e 5s. A primeira ponte a
+ * seguir a um backfill de anos pode ter centenas de linhas em toCreate; um
+ * timeout explicito e generoso substitui a dependencia silenciosa do omisso.
+ */
+const BRIDGE_TX_TIMEOUT_MS = 30_000;
+
+/**
+ * Chave (section, group, name) que identifica uma categoria a resolver.
+ * JSON.stringify evita colisoes entre nomes que possam conter o separador --
+ * as tres categorias de CATEGORIES em t212.bridge.ts nunca colidiriam, mas a
+ * chave nao pode depender disso.
+ */
+const categoryKey = (row: { section: string; group: string; name: string }) =>
+  JSON.stringify([row.section, row.group, row.name]);
 
 const TABLE = {
   orders: "brokerOrder",
@@ -187,49 +204,74 @@ export const prismaRepo: SyncRepo = {
       return { created: 0, deleted: 0 };
     }
 
-    return prisma.$transaction(async (tx) => {
-      const deleted = plan.toDelete.length
-        ? (
-            await tx.transaction.deleteMany({
-              where: { userId, source: "api", externalId: { in: plan.toDelete } },
-            })
-          ).count
-        : 0;
+    return prisma.$transaction(
+      async (tx) => {
+        const deleted = plan.toDelete.length
+          ? (
+              await tx.transaction.deleteMany({
+                where: {
+                  userId,
+                  source: "api",
+                  // O prefixo repete aqui a garantia que o reconcilePlan ja da ao
+                  // "existing": o apagar nunca pode sair do que a propria ponte
+                  // criou, mesmo que source:"api" um dia sirva outro importador
+                  // ou que alguem chame applyBridge com ids de fora do reconcilePlan.
+                  externalId: { in: plan.toDelete, startsWith: BRIDGE_PREFIX },
+                },
+              })
+            ).count
+          : 0;
 
-      let created = 0;
-      for (const row of plan.toCreate) {
-        // A categoria resolve-se por (section, group, name) e cria-se se faltar
-        // -- a folha pode ainda nao ter a linha dos dividendos.
-        const category = await tx.category.upsert({
-          where: {
-            userId_section_group_name: {
-              userId,
-              section: row.section,
-              group: row.group,
-              name: row.name,
+        // As categorias possiveis sao as tres de CATEGORIES em t212.bridge.ts.
+        // Resolvidas uma vez aqui, fora do ciclo -- resolver por linha (ate
+        // centenas delas na primeira ponte a seguir a um backfill de anos)
+        // multiplicava idas sequenciais a base contra o limite de 5s da
+        // transaccao interactiva e rebentava com P2028 sem nunca progredir,
+        // porque a corrida seguinte encontrava o mesmo toCreate por criar.
+        const categoryIds = new Map<string, string>();
+        for (const row of plan.toCreate) {
+          const key = categoryKey(row);
+          if (categoryIds.has(key)) continue;
+
+          const category = await tx.category.upsert({
+            where: {
+              userId_section_group_name: {
+                userId,
+                section: row.section,
+                group: row.group,
+                name: row.name,
+              },
             },
-          },
-          create: { userId, section: row.section, group: row.group, name: row.name },
-          update: {},
-          select: { id: true },
-        });
+            create: { userId, section: row.section, group: row.group, name: row.name },
+            update: {},
+            select: { id: true },
+          });
+          categoryIds.set(key, category.id);
+        }
 
-        await tx.transaction.create({
-          data: {
-            userId,
-            date: new Date(row.date),
-            amount: dec(row.amount),
-            merchant: row.merchant,
-            rawDescription: row.rawDescription,
-            categoryId: category.id,
-            source: "api",
-            externalId: row.externalId,
-          },
-        });
-        created += 1;
-      }
+        const created = plan.toCreate.length
+          ? (
+              await tx.transaction.createMany({
+                data: plan.toCreate.map((row) => ({
+                  userId,
+                  date: new Date(row.date),
+                  amount: dec(row.amount),
+                  merchant: row.merchant,
+                  rawDescription: row.rawDescription,
+                  categoryId: categoryIds.get(categoryKey(row))!,
+                  source: "api",
+                  externalId: row.externalId,
+                })),
+              })
+            ).count
+          : 0;
 
-      return { created, deleted };
-    });
+        return { created, deleted };
+      },
+      // Explicito em vez de confiar no omisso de 5s: mesmo com as categorias
+      // resolvidas de antemao, um createMany de centenas de linhas junto com
+      // ate tres upserts merece margem.
+      { timeout: BRIDGE_TX_TIMEOUT_MS }
+    );
   },
 };

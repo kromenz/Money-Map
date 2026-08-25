@@ -73,6 +73,8 @@ export type StageReport = {
   skipped: number;
   pages: number;
   error?: string;
+  /** So preenchido pela etapa bridge: quantas linhas o corte apagou. */
+  deleted?: number;
 };
 
 export type SyncReport = {
@@ -152,6 +154,10 @@ async function syncHistory<T, R extends { externalId: string }>(
 ): Promise<void> {
   const state = await deps.repo.getState(userId, opts.kind);
   const backfilling = !state?.backfillDone;
+  // O gerador do cliente pode parar por dois motivos: chegou ao fim
+  // (nextPagePath:null) ou o guarda contra ciclos cortou porque um caminho se
+  // repetiu. So o primeiro conta como "acabou" -- ver o if a seguir ao loop.
+  let backfillReachedEnd = false;
 
   const pages = deps.client.paginate(
     opts.path,
@@ -185,6 +191,7 @@ async function syncHistory<T, R extends { externalId: string }>(
       // obrigar a recomecar -- no maximo repete-se a pagina que ja foi escrita,
       // e a escrita e idempotente pelo externalId.
       const done = page.nextPagePath === null;
+      if (done) backfillReachedEnd = true;
       await deps.repo.setState(userId, opts.kind, {
         backfillCursor: done ? null : page.nextPagePath,
         backfillDone: done,
@@ -195,6 +202,15 @@ async function syncHistory<T, R extends { externalId: string }>(
     // Corrida incremental: a partir do primeiro conhecido e tudo historico ja
     // espelhado.
     if (known.size > 0) return;
+  }
+
+  if (backfilling && !backfillReachedEnd) {
+    // O loop acabou sem nunca ver nextPagePath:null -- o guarda contra ciclos
+    // do cliente cortou a paginacao a meio. Ficar calado aqui deixava
+    // backfillDone em falso para sempre: cada corrida seguinte voltava a
+    // reler o historico desde o cursor guardado sem nunca passar a
+    // incremental, sem nenhum sinal disso no relatorio.
+    throw new Error("paginacao terminou sem chegar ao fim do historico");
   }
 }
 
@@ -210,6 +226,17 @@ export async function syncAll(
       const raw = await deps.client.request<unknown[]>(PATHS.positions);
       const parsed = parseItems(positionSchema, raw ?? []);
       report.skipped += parsed.skipped.length;
+
+      if (parsed.items.length === 0 && parsed.skipped.length > 0) {
+        // Tudo saltou no Zod -- provavelmente a T212 renomeou um campo.
+        // replaceHoldings([]) apagava a carteira real sem repor nada, e a
+        // etapa ainda dizia ok:true. Uma carteira desactualizada e muito
+        // melhor do que uma carteira apagada.
+        throw new Error(
+          `todos os ${parsed.skipped.length} itens de posicoes foram saltados pelo Zod; carteira nao substituida`
+        );
+      }
+
       report.written = await deps.repo.replaceHoldings(
         userId,
         toHoldingRows(parsed.items)
@@ -276,6 +303,9 @@ export async function syncAll(
       );
       const applied = await deps.repo.applyBridge(userId, plan);
       report.written = applied.created;
+      // written:0 sozinho nao distingue "nada mudou" de "quarenta transaccoes
+      // visiveis ao utilizador desapareceram porque o corte avancou".
+      report.deleted = applied.deleted;
     })
   );
 
