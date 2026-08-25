@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MONTH_LABELS } from "@/lib/format";
+import { groupCategories } from "@/lib/category-groups";
 import { addExpense } from "@/services/expense.service";
 import type { GridRow } from "@/types/budget";
 
@@ -62,22 +63,12 @@ export function AddExpenseBar({
     label: c.group === "" ? c.name : `${c.group} · ${c.name}`,
   }));
 
-  // Agrupadas para a lista, pela ordem em que a folha as tem. Uma lista plana
-  // de trinta e tal linhas com o grupo repetido em cada uma ("Transportation ·
-  // Fuel", "Transportation · Auto Insurance", ...) e comprida de mais para ler
-  // e desperdica a largura toda a repetir a mesma palavra. Com o grupo em
-  // cabecalho, cada linha fica so com o nome.
-  const grouped: { group: string; items: typeof categoryItems }[] = [];
-  for (const c of categories) {
-    const last = grouped[grouped.length - 1];
-    if (!last || last.group !== c.group) {
-      grouped.push({ group: c.group, items: [] });
-    }
-    grouped[grouped.length - 1].items.push({
-      value: c.categoryId,
-      label: c.name,
-    });
-  }
+  // Agrupadas para a lista, pela ordem da primeira aparicao de cada grupo. Uma
+  // lista plana de trinta e tal linhas com o grupo repetido em cada uma
+  // ("Transportation · Fuel", "Transportation · Auto Insurance", ...) e comprida
+  // de mais para ler e desperdica a largura toda a repetir a mesma palavra. Com
+  // o grupo em cabecalho, cada linha fica so com o nome.
+  const grouped = groupCategories(categories);
   const monthItems = MONTH_LABELS.map((label, i) => ({ value: i + 1, label }));
 
   const normalizedAmount = amount.replace(",", ".");
