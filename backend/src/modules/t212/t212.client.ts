@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { T212Config } from "./t212.config";
 
 export const PATHS = {
@@ -26,7 +27,26 @@ export function basicAuth(apiKey: string, apiSecret: string): string {
   return "Basic " + Buffer.from(`${apiKey}:${apiSecret}`).toString("base64");
 }
 
-type PageResponse = { items?: unknown[]; nextPagePath?: string | null };
+/**
+ * O envelope da paginacao e tao contrato com a API como os itens que transporta,
+ * e ate aqui era so um tipo de TypeScript -- apagado em tempo de execucao.
+ *
+ * Se a T212 renomear `items`, sem esta validacao a pagina lia-se como
+ * `items: []` e `nextPagePath: null`, o syncHistory concluia que tinha chegado
+ * ao fim do historico, gravava backfillDone:true com zero linhas e reportava
+ * ok:true. A partir dai o historico nunca mais era lido e nao havia sinal
+ * nenhum disso -- o pior desfecho possivel para um espelho de dados.
+ *
+ * Por isso os dois campos sao exigidos: `nextPagePath` ausente e tao capaz de
+ * dar por terminado um backfill em silencio como `items` ausente. A ultima
+ * pagina manda-o explicitamente a null.
+ */
+const pageResponseSchema = z.object({
+  items: z.array(z.unknown()),
+  nextPagePath: z.string().nullable(),
+});
+
+type PageResponse = z.infer<typeof pageResponseSchema>;
 
 /**
  * O x-ratelimit-reset vem como instante unix em segundos; now() esta em
@@ -112,9 +132,10 @@ export class T212Client {
       // Anotacoes explicitas aqui evitam um TS7022: sem elas o compilador
       // enreda-se a inferir o tipo de "page" a partir do proprio generator
       // que o consome, e declara-o circular.
-      const page: PageResponse = await this.request<PageResponse>(next);
-      const nextPagePath: string | null = page.nextPagePath ?? null;
-      yield { items: page.items ?? [], nextPagePath };
+      const raw: unknown = await this.request<unknown>(next);
+      const page: PageResponse = parsePage(raw, next);
+      const nextPagePath: string | null = page.nextPagePath;
+      yield { items: page.items, nextPagePath };
       next = nextPagePath;
     }
   }
@@ -159,6 +180,25 @@ export class T212Client {
     }
     return DEFAULT_BACKOFF_MS;
   }
+}
+
+/**
+ * 502 porque o problema nao esta no pedido nem na chave: esta na forma do que
+ * chegou. A mensagem nomeia o caminho e o campo em falta, que e o que permite
+ * ver no painel de estado que a API mudou -- em vez de um backfill que se
+ * declara concluido sem ter lido nada.
+ */
+function parsePage(raw: unknown, path: string): PageResponse {
+  const parsed = pageResponseSchema.safeParse(raw);
+  if (parsed.success) return parsed.data;
+
+  const detalhe = parsed.error.issues
+    .map((i) => `${i.path.join(".") || "(raiz)"}: ${i.message}`)
+    .join("; ");
+  throw new T212Error(
+    `Resposta paginada do Trading 212 em formato inesperado (${path}): ${detalhe}`,
+    502
+  );
 }
 
 async function describe(res: Response): Promise<string> {

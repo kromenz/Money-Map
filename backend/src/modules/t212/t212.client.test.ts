@@ -237,14 +237,44 @@ describe("T212Client.paginate", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("https://demo.trading212.com" + guardado);
   });
 
-  it("uma resposta sem items nao rebenta", async () => {
+  // Este teste ja afirmou o contrario: que uma resposta sem `items` nao
+  // rebentava e valia como pagina vazia. Isso era exactamente o modo de falha
+  // silencioso que a validacao do envelope veio fechar -- um campo renomeado
+  // pela T212 dava uma pagina vazia sem pagina seguinte, o backfill dava-se por
+  // concluido com zero linhas e o historico nunca mais era lido.
+  it("uma resposta sem items rebenta, em vez de valer como fim do historico", async () => {
     const fetchMock = vi.fn(async () => jsonResponse({ nextPagePath: null }));
     const { client } = make(fetchMock as unknown as typeof fetch);
 
-    const pages: { items: unknown[] }[] = [];
-    for await (const page of client.paginate(PATHS.dividends)) pages.push(page);
+    const consumir = async () => {
+      for await (const _page of client.paginate(PATHS.dividends)) break;
+    };
 
-    expect(pages.map((p) => p.items)).toEqual([[]]);
+    await expect(consumir()).rejects.toThrow(/items/);
+  });
+
+  it("a mensagem do envelope invalido nomeia o caminho pedido", async () => {
+    // Sem o caminho na mensagem, o painel de estado dizia so que a forma mudou
+    // -- nao em que endpoint, que e o unico dado que resolve o problema.
+    const fetchMock = vi.fn(async () => jsonResponse({ items: "nao e um array", nextPagePath: null }));
+    const { client } = make(fetchMock as unknown as typeof fetch);
+
+    const consumir = async () => {
+      for await (const _page of client.paginate(PATHS.orders)) break;
+    };
+
+    await expect(consumir()).rejects.toThrow(/history\/orders/);
+  });
+
+  it("um nextPagePath ausente tambem rebenta -- terminaria o backfill em silencio", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ items: [] }));
+    const { client } = make(fetchMock as unknown as typeof fetch);
+
+    const consumir = async () => {
+      for await (const _page of client.paginate(PATHS.transactions)) break;
+    };
+
+    await expect(consumir()).rejects.toThrow(/nextPagePath/);
   });
 
   // Ronda de fix 1 -- Minor 3: salvaguarda contra a API, nao contra nos. Um
