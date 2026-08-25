@@ -27,6 +27,18 @@ export type MonthComparison = {
   ok: boolean;
 };
 
+/**
+ * O que a reconciliacao da ponte do Trading 212 fez a seguir a importacao.
+ * Importar a folha faz o corte avancar, e por isso e no import que as linhas
+ * que a ponte tinha criado saem da grelha.
+ */
+export type BridgeReconcile = {
+  created: number;
+  deleted: number;
+  /** So quando a reconciliacao falhou; a importacao passou na mesma. */
+  error?: string;
+};
+
 export type ImportResult = {
   year: number;
   categoriesCreated: number;
@@ -40,6 +52,7 @@ export type ImportResult = {
     comparisonsSkipped: number;
   };
   allMatch: boolean;
+  bridge: BridgeReconcile;
 };
 
 export type YearWithData = {

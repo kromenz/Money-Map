@@ -13,6 +13,25 @@ import { runBridge } from "../t212/t212.bridge";
 import { loadT212Config } from "../t212/t212.config";
 import { prismaRepo } from "../t212/t212.repo";
 
+/**
+ * O que a reconciliacao da ponte fez a seguir a este import.
+ *
+ * Viaja no ImportResult porque e o import que faz o corte avancar, e portanto e
+ * o import que faz as linhas da ponte desaparecerem da grelha. Sem isto, a
+ * pessoa importava a folha, via a grelha encolher, e nao havia mensagem em lado
+ * nenhum -- o `deleted` so aparecia no relatorio da sincronizacao, que e o
+ * outro caminho.
+ */
+export type BridgeReconcile = {
+  created: number;
+  deleted: number;
+  /**
+   * Preenchido so quando a reconciliacao falhou. A importacao passou na mesma
+   * -- ver reconcileBridgeAfterImport -- mas isso tem de ser visivel.
+   */
+  error?: string;
+};
+
 export type ImportResult = {
   year: number;
   categoriesCreated: number;
@@ -20,6 +39,7 @@ export type ImportResult = {
   comparisons: MonthComparison[];
   structure: StructureReport;
   allMatch: boolean;
+  bridge: BridgeReconcile;
 };
 
 /**
@@ -85,7 +105,7 @@ export async function importBudgetWorkbook(
     throw err;
   }
 
-  await reconcileBridgeAfterImport(userId);
+  result.bridge = await reconcileBridgeAfterImport(userId);
   return result;
 }
 
@@ -104,14 +124,36 @@ export async function importBudgetWorkbook(
  * por isso que o erro so se regista: o pior caso passa a ser o comportamento
  * que havia antes, com a proxima sincronizacao a reconciliar.
  */
-async function reconcileBridgeAfterImport(userId: string): Promise<void> {
+async function reconcileBridgeAfterImport(
+  userId: string
+): Promise<BridgeReconcile> {
+  return bridgeOutcome(() =>
+    runBridge(userId, prismaRepo, loadT212Config().bridgeFrom)
+  );
+}
+
+/**
+ * A parte da reconciliacao que nao toca na base: correr, e transformar o
+ * desfecho em algo que o relatorio consegue mostrar.
+ *
+ * Separada para ser testavel -- o importBudgetWorkbook precisa de uma folha
+ * verdadeira e de um Postgres, e a regra que interessa aqui (o numero de
+ * apagados chega ao relatorio; uma falha aparece sem derrubar o import) nao
+ * precisa de nenhum dos dois.
+ */
+export async function bridgeOutcome(
+  run: () => Promise<{ created: number; deleted: number }>
+): Promise<BridgeReconcile> {
   try {
-    await runBridge(userId, prismaRepo, loadT212Config().bridgeFrom);
+    const { created, deleted } = await run();
+    return { created, deleted };
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     console.error(
       "[budget] import feito, mas a reconciliacao da ponte T212 falhou",
       err
     );
+    return { created: 0, deleted: 0, error: message };
   }
 }
 
@@ -248,6 +290,9 @@ async function writeAndVerify(
       comparisonsSkipped: skipped,
     },
     allMatch: comparisons.length > 0 && comparisons.every((c) => c.ok),
+    // Preenchido a seguir a transacao, pelo importBudgetWorkbook. Um import que
+    // reverta nunca mexeu no corte, portanto fica mesmo em zeros.
+    bridge: { created: 0, deleted: 0 },
   };
 }
 
