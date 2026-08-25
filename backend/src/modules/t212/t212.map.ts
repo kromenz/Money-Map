@@ -61,10 +61,17 @@ export type CashFlowRow = {
 /**
  * A API manda numeros JSON. A conversao para string acontece aqui, uma vez, na
  * fronteira -- dai para dentro e sempre Decimal, e nunca ha um float a somar-se
- * a outro. Adiciona offset para corrigir erros de floating-point no arredondamento.
+ * a outro.
  */
 export function money(n: number): string {
-  return (Math.round(n * 100 + 1e-6) / 100).toFixed(2);
+  const scaled = n * 100;
+  // A correccao de representacao aplica-se a magnitude, e o sinal repoe-se
+  // depois: Math.round arredonda o meio para +infinito, o que daria 1.01 para
+  // 1.005 mas -1.00 para -1.005. Dinheiro tem de arredondar igual dos dois
+  // lados do zero, senao os negativos -- compras, levantamentos, taxas --
+  // acumulam um enviesamento de meio centimo num so sentido.
+  const rounded = Math.sign(scaled) * Math.round(Math.abs(scaled) + 1e-6);
+  return (rounded / 100).toFixed(2);
 }
 
 export function qty(n: number): string {

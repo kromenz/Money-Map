@@ -10,6 +10,26 @@ describe("money e qty", () => {
   it("arredonda em vez de truncar", () => {
     expect(money(1.005)).toBe("1.01");
   });
+
+  it("arredonda simetricamente positivos e negativos", () => {
+    // Os negativos sao comuns (compras, levantamentos, taxas) e precisam de
+    // arredondar igual dos dois lados do zero, senao acumulam enviesamento.
+    expect(money(1.005)).toBe("1.01");
+    expect(money(-1.005)).toBe("-1.01");
+    expect(money(2.675)).toBe("2.68");
+    expect(money(-2.675)).toBe("-2.68");
+  });
+
+  it("arredonda pequenos negativos para longe do zero", () => {
+    // -0.005 arredonda para -0.01, nao para zero: eh simetrico.
+    expect(money(-0.005)).toBe("-0.01");
+  });
+
+  it("valores negativos comuns funcionam", () => {
+    // netValue de uma compra, um levantamento, uma taxa.
+    expect(money(-176.2)).toBe("-176.20");
+    expect(money(-0.7)).toBe("-0.70");
+  });
 });
 
 describe("toHoldingRows", () => {
