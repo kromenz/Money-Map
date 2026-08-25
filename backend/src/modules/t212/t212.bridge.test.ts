@@ -9,6 +9,7 @@ import {
   excelMonthCap,
   runBridge,
   BRIDGE_PREFIX,
+  INTEREST_PREFIX,
   type BridgeRepo,
   type BridgeRow,
 } from "./t212.bridge";
@@ -57,7 +58,7 @@ describe("bridgeRows", () => {
       amount: "1.31",
       merchant: "AAPL_US_EQ",
     });
-    expect(rows.find((r) => r.externalId === `${BRIDGE_PREFIX}i-1`)).toMatchObject({
+    expect(rows.find((r) => r.externalId === `${INTEREST_PREFIX}2026-09`)).toMatchObject({
       section: "income",
       amount: "1.20",
     });
@@ -87,7 +88,7 @@ describe("bridgeRows", () => {
   it("nada anterior ao corte atravessa", () => {
     const rows = bridgeRows(source, "2026-09-12");
     expect(rows.map((r) => r.externalId)).toEqual([
-      `${BRIDGE_PREFIX}i-1`,
+      `${INTEREST_PREFIX}2026-09`,
       `${BRIDGE_PREFIX}div-1`,
     ]);
   });
@@ -99,6 +100,87 @@ describe("bridgeRows", () => {
 
   it("todos os externalId levam o prefixo -- e o que os torna reversiveis", () => {
     expect(bridgeRows(source, null).every((r) => r.externalId.startsWith(BRIDGE_PREFIX))).toBe(true);
+  });
+});
+
+describe("bridgeRows -- juros agregados por mes", () => {
+  // ~0,20 EUR/dia. Um lancamento por dia sao 311 linhas desde Janeiro de 2025
+  // para 31 EUR no total, e a grelha do orcamento fica ilegivel. Agregam-se.
+  const juros = {
+    cashflows: [
+      cashflow("i-a", "2026-09-01T09:00:00Z", "INTEREST_ON_FREE_CASH", "0.20"),
+      cashflow("i-b", "2026-09-02T09:00:00Z", "INTEREST_ON_FREE_CASH", "0.21"),
+      cashflow("i-c", "2026-09-03T09:00:00Z", "LENDING_INTEREST", "0.05"),
+      cashflow("i-d", "2026-10-01T09:00:00Z", "INTEREST_ON_FREE_CASH", "0.22"),
+    ],
+    dividends: [],
+  };
+
+  it("um mes de juros da um lancamento so, com a soma la dentro", () => {
+    const rows = bridgeRows(juros, null);
+    const setembro = rows.filter((r) => r.externalId.startsWith(INTEREST_PREFIX));
+
+    expect(setembro).toHaveLength(2);
+    expect(rows.find((r) => r.externalId === `${INTEREST_PREFIX}2026-09`)).toMatchObject({
+      amount: "0.46",
+      section: "income",
+      name: "Interest",
+    });
+  });
+
+  it("as duas especies de juros somam no mesmo lancamento", () => {
+    // LENDING_INTEREST e INTEREST_ON_FREE_CASH sao a mesma linha do orcamento;
+    // separa-los dava duas linhas de cêntimos onde o utilizador espera uma.
+    const rows = bridgeRows(
+      { cashflows: [juros.cashflows[2]], dividends: [] },
+      null
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ externalId: `${INTEREST_PREFIX}2026-09`, amount: "0.05" });
+  });
+
+  it("meses diferentes ficam em lancamentos diferentes", () => {
+    const ids = bridgeRows(juros, null).map((r) => r.externalId);
+    expect(ids).toContain(`${INTEREST_PREFIX}2026-09`);
+    expect(ids).toContain(`${INTEREST_PREFIX}2026-10`);
+  });
+
+  it("a data do agregado e o primeiro dia de juros do mes, e nao o ultimo", () => {
+    // Estavel enquanto o mes corre: com o ultimo dia, cada sincronizacao mudava
+    // a data alem do valor e a actualizacao passava a mexer em dois campos.
+    const row = bridgeRows(juros, null).find(
+      (r) => r.externalId === `${INTEREST_PREFIX}2026-09`
+    );
+    expect(row!.date).toBe("2026-09-01");
+  });
+
+  it("a data e o minimo, mesmo com os movimentos fora de ordem", () => {
+    const baralhados = {
+      cashflows: [juros.cashflows[1], juros.cashflows[0]],
+      dividends: [],
+    };
+    const row = bridgeRows(baralhados, null)[0];
+    expect(row.date).toBe("2026-09-01");
+  });
+
+  it("o corte aplica-se ao movimento diario, nao ao mes inteiro", () => {
+    // O T212_BRIDGE_FROM e escrito a mao e nao tem de cair no dia 1. Um corte
+    // a meio do mes deixa entrar so a parte do mes que o atravessa.
+    const row = bridgeRows(juros, "2026-09-02")
+      .find((r) => r.externalId === `${INTEREST_PREFIX}2026-09`);
+    expect(row).toMatchObject({ amount: "0.26", date: "2026-09-02" });
+  });
+
+  it("um mes inteiro anterior ao corte nao produz lancamento nenhum", () => {
+    const ids = bridgeRows(juros, "2026-10-01").map((r) => r.externalId);
+    expect(ids).not.toContain(`${INTEREST_PREFIX}2026-09`);
+    expect(ids).toContain(`${INTEREST_PREFIX}2026-10`);
+  });
+
+  it("os depositos continuam um por movimento -- so os juros agregam", () => {
+    const rows = bridgeRows(source, null);
+    expect(rows.map((r) => r.externalId)).toContain(`${BRIDGE_PREFIX}d-1`);
+    expect(rows.map((r) => r.externalId)).toContain(`${BRIDGE_PREFIX}w-1`);
   });
 });
 
@@ -202,15 +284,22 @@ describe("reconcilePlan", () => {
   });
 
   it("nao recria o que ja existe", () => {
-    const plan = reconcilePlan(desired.map((d) => ({ externalId: d.externalId })), desired);
+    const plan = reconcilePlan(
+      desired.map((d) => ({ externalId: d.externalId, amount: d.amount })),
+      desired
+    );
     expect(plan.toCreate).toEqual([]);
     expect(plan.toDelete).toEqual([]);
+    expect(plan.toUpdate).toEqual([]);
   });
 
   it("apaga o que deixou de ser desejado quando o corte avanca", () => {
     // Ja existiam linhas de setembro; uma folha nova passou a cobrir setembro
     // e o corte avancou para outubro.
-    const existing = bridgeRows(source, null).map((d) => ({ externalId: d.externalId }));
+    const existing = bridgeRows(source, null).map((d) => ({
+      externalId: d.externalId,
+      amount: d.amount,
+    }));
     const plan = reconcilePlan(existing, bridgeRows(source, "2026-10-01"));
 
     expect(plan.toCreate).toEqual([]);
@@ -222,11 +311,70 @@ describe("reconcilePlan", () => {
     // Se um dia alguem passar aqui todas as transaccoes em vez de so as da
     // ponte, a funcao tem de se defender sozinha -- nao pode confiar na
     // disciplina de quem a chama.
-    const existing = [{ externalId: "manual-1" }];
+    const existing = [{ externalId: "manual-1", amount: "9.99" }];
     const plan = reconcilePlan(existing, []);
 
     expect(plan.toDelete).not.toContain("manual-1");
     expect(plan.toDelete).toEqual([]);
+  });
+
+  it("nunca actualiza uma linha sem o prefixo, mesmo com o mesmo identificador", () => {
+    const desejado: BridgeRow[] = [
+      { ...desired[0], externalId: "manual-1", amount: "1.00" },
+    ];
+    const plan = reconcilePlan([{ externalId: "manual-1", amount: "9.99" }], desejado);
+
+    expect(plan.toUpdate).toEqual([]);
+    // Nao sendo dela, a linha manual nao e reconhecida como existente: o
+    // desejado com esse id conta como criacao, que e o comportamento que o
+    // prefixo impoe em toda a funcao.
+    expect(plan.toCreate).toHaveLength(1);
+  });
+
+  it("actualiza o agregado dos juros quando o mes cresce", () => {
+    // O unico externalId cujo valor muda depois de existir. Antes do toUpdate,
+    // o reconcilePlan via-o como "ja existe" e o mes ficava congelado no valor
+    // do primeiro dia em que a ponte correu.
+    const antes = bridgeRows(
+      { cashflows: [cashflow("i-a", "2026-09-01T09:00:00Z", "INTEREST_ON_FREE_CASH", "0.20")], dividends: [] },
+      null
+    );
+    const agora = bridgeRows(
+      {
+        cashflows: [
+          cashflow("i-a", "2026-09-01T09:00:00Z", "INTEREST_ON_FREE_CASH", "0.20"),
+          cashflow("i-b", "2026-09-02T09:00:00Z", "INTEREST_ON_FREE_CASH", "0.21"),
+        ],
+        dividends: [],
+      },
+      null
+    );
+
+    const plan = reconcilePlan(
+      antes.map((r) => ({ externalId: r.externalId, amount: r.amount })),
+      agora
+    );
+
+    expect(plan.toCreate).toEqual([]);
+    expect(plan.toDelete).toEqual([]);
+    expect(plan.toUpdate).toHaveLength(1);
+    expect(plan.toUpdate[0]).toMatchObject({
+      externalId: `${INTEREST_PREFIX}2026-09`,
+      amount: "0.41",
+    });
+  });
+
+  it("nao actualiza o que nao mudou -- inclusive escrito de outra maneira", () => {
+    // "-0.00" e "0.00" sao a mesma quantia. Comparadas como texto davam uma
+    // actualizacao a cada corrida, para sempre.
+    const plan = reconcilePlan(
+      desired.map((d) => ({
+        externalId: d.externalId,
+        amount: d.amount === "0.00" ? "-0.00" : d.amount,
+      })),
+      desired
+    );
+    expect(plan.toUpdate).toEqual([]);
   });
 });
 
@@ -241,12 +389,14 @@ describe("runBridge", () => {
   } => ({
     lastExcelMonth: vi.fn(async () => ({ year: 2026, month: 9 })),
     bridgeSource: vi.fn(async () => source as never),
-    existingBridgeIds: vi.fn(async () => [] as { externalId: string }[]),
+    existingBridgeRows: vi.fn(
+      async () => [] as { externalId: string; amount: string }[]
+    ),
     applyBridge: vi.fn(
       async (
         _userId: string,
-        _plan: { toDelete: string[]; toCreate: BridgeRow[] }
-      ) => ({ created: 0, deleted: 0 })
+        _plan: { toDelete: string[]; toCreate: BridgeRow[]; toUpdate: BridgeRow[] }
+      ) => ({ created: 0, deleted: 0, updated: 0 })
     ),
     ...over,
   } as BridgeRepo & { applyBridge: ReturnType<typeof vi.fn> });
@@ -267,7 +417,7 @@ describe("runBridge", () => {
 
     const plan = repo.applyBridge.mock.calls[0][1] as { toCreate: BridgeRow[] };
     expect(plan.toCreate.map((r) => r.externalId)).toEqual([
-      `${BRIDGE_PREFIX}i-1`,
+      `${INTEREST_PREFIX}2026-09`,
       `${BRIDGE_PREFIX}div-1`,
     ]);
   });
@@ -278,10 +428,15 @@ describe("runBridge", () => {
     // Setembro passam a estar representadas duas vezes na grelha.
     const jaCriadas = bridgeRows(source, null).map((r) => ({
       externalId: r.externalId,
+      amount: r.amount,
     }));
     const repo = fakeRepo({
-      existingBridgeIds: vi.fn(async () => jaCriadas),
-      applyBridge: vi.fn(async () => ({ created: 0, deleted: jaCriadas.length })),
+      existingBridgeRows: vi.fn(async () => jaCriadas),
+      applyBridge: vi.fn(async () => ({
+        created: 0,
+        deleted: jaCriadas.length,
+        updated: 0,
+      })),
     });
 
     const applied = await runBridge("u1", repo, null);
@@ -293,9 +448,13 @@ describe("runBridge", () => {
 
   it("devolve o que o repositorio aplicou, para o relatorio poder mostra-lo", async () => {
     const repo = fakeRepo({
-      applyBridge: vi.fn(async () => ({ created: 3, deleted: 7 })),
+      applyBridge: vi.fn(async () => ({ created: 3, deleted: 7, updated: 2 })),
     });
 
-    expect(await runBridge("u1", repo, null)).toEqual({ created: 3, deleted: 7 });
+    expect(await runBridge("u1", repo, null)).toEqual({
+      created: 3,
+      deleted: 7,
+      updated: 2,
+    });
   });
 });

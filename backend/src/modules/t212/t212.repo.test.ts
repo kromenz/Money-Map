@@ -78,7 +78,7 @@ describe("prismaRepo.applyBridge", () => {
       row({ externalId: "t212:5", ...CATEGORIES.interest }),
     ];
 
-    const result = await prismaRepo.applyBridge("u1", { toDelete: [], toCreate });
+    const result = await prismaRepo.applyBridge("u1", { toDelete: [], toCreate, toUpdate: [] });
 
     expect(mockPrisma.category.upsert).toHaveBeenCalledTimes(3);
     expect(mockPrisma.transaction.createMany).toHaveBeenCalledTimes(1);
@@ -97,7 +97,7 @@ describe("prismaRepo.applyBridge", () => {
   });
 
   it("passa um timeout explicito a transaccao interactiva, em vez de confiar no omisso de 5s", async () => {
-    await prismaRepo.applyBridge("u1", { toDelete: [], toCreate: [row()] });
+    await prismaRepo.applyBridge("u1", { toDelete: [], toCreate: [row()], toUpdate: [] });
 
     expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
     expect(capturedTxOptions).toEqual(
@@ -113,6 +113,7 @@ describe("prismaRepo.applyBridge", () => {
     await prismaRepo.applyBridge("u1", {
       toDelete: ["t212:a", "t212:b"],
       toCreate: [],
+      toUpdate: [],
     });
 
     expect(mockPrisma.transaction.deleteMany).toHaveBeenCalledTimes(1);

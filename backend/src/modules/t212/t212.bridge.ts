@@ -39,6 +39,22 @@ export type BridgeSource = {
 export const BRIDGE_PREFIX = "t212:";
 
 /**
+ * Os juros nao vao um por movimento como o resto: sao ~0,20 EUR/dia, e um
+ * lancamento por dia enchia a grelha com centenas de linhas para 31 EUR no
+ * total. Agregam-se por mes, num lancamento so.
+ *
+ * O identificador e o mes, e nao o movimento, porque o mes em curso volta a
+ * ser calculado a cada sincronizacao com mais um dia de juros dentro. E por
+ * isso que o reconcilePlan precisa de saber actualizar: este e o unico
+ * externalId cujo valor muda depois de existir.
+ */
+export const INTEREST_PREFIX = `${BRIDGE_PREFIX}interest:`;
+
+function isInterest(type: CashFlowKind): boolean {
+  return type === "INTEREST_ON_FREE_CASH" || type === "LENDING_INTEREST";
+}
+
+/**
  * As categorias resolvem-se por (section, group, name), a mesma chave do
  * PendingExpense. Se a folha ja tiver categorias equivalentes com outro nome,
  * e aqui que se muda -- num sitio, nao espalhado pelo codigo.
@@ -123,23 +139,58 @@ export function bridgeRows(
   const rows: BridgeRow[] = [];
   const after = (date: string) => cutoff === null || date >= cutoff;
 
+  // Acumulador dos juros por mes. O corte aplica-se ao movimento diario e nao
+  // ao agregado: um corte a meio do mes (o T212_BRIDGE_FROM e escrito a mao e
+  // nao tem de cair no dia 1) deixa entrar so a parte do mes que atravessa.
+  const interest = new Map<string, { first: string; total: Prisma.Decimal }>();
+
   for (const c of source.cashflows) {
     const date = day(c.dateTime);
     if (!crossesToBudget(c.type, date, cutoff)) continue;
 
-    const income =
-      c.type === "INTEREST_ON_FREE_CASH" || c.type === "LENDING_INTEREST";
-    const category = income ? CATEGORIES.interest : CATEGORIES.transfers;
+    if (isInterest(c.type)) {
+      const month = date.slice(0, 7);
+      const acc = interest.get(month);
+      if (!acc) {
+        interest.set(month, { first: date, total: new Prisma.Decimal(c.amount) });
+      } else {
+        acc.total = acc.total.add(c.amount);
+        // O primeiro dia e nao o ultimo: a data do agregado tem de ser estavel
+        // enquanto o mes corre. Com o ultimo dia, cada sincronizacao mudava
+        // tambem a data e nao so o valor, e a actualizacao passava a ter de
+        // mexer em dois campos em vez de um. Os movimentos chegam da API sem
+        // ordem garantida, por isso e um minimo e nao o primeiro que se ve.
+        if (date < acc.first) acc.first = date;
+      }
+      continue;
+    }
 
     rows.push({
       externalId: BRIDGE_PREFIX + c.externalId,
       date,
-      amount: storedAmount(category.section, c.amount),
-      section: category.section,
-      group: category.group,
-      name: category.name,
+      amount: storedAmount(CATEGORIES.transfers.section, c.amount),
+      section: CATEGORIES.transfers.section,
+      group: CATEGORIES.transfers.group,
+      name: CATEGORIES.transfers.name,
       merchant: "Trading 212",
       rawDescription: `T212 ${c.type}`,
+    });
+  }
+
+  // Ordenados para a saida ser determinista: o Map preserva a ordem de
+  // insercao, que e a ordem em que a API entregou os movimentos, e essa pode
+  // mudar entre corridas.
+  for (const month of [...interest.keys()].sort()) {
+    const acc = interest.get(month)!;
+    rows.push({
+      externalId: INTEREST_PREFIX + month,
+      date: acc.first,
+      amount: storedAmount(CATEGORIES.interest.section, acc.total.toFixed(2)),
+      section: CATEGORIES.interest.section,
+      group: CATEGORIES.interest.group,
+      name: CATEGORIES.interest.name,
+      merchant: "Trading 212",
+      rawDescription: `T212 juros ${month}`,
     });
   }
 
@@ -162,28 +213,43 @@ export function bridgeRows(
   return rows;
 }
 
+export type BridgePlan = {
+  toDelete: string[];
+  toCreate: BridgeRow[];
+  /**
+   * Linhas que ja existem com o mesmo externalId mas outro valor. Na pratica
+   * so o agregado mensal dos juros cai aqui: todos os outros externalId vem de
+   * um movimento que a corretora nao volta a mexer.
+   */
+  toUpdate: BridgeRow[];
+};
+
 /**
  * O corte pode avancar quando se importa uma folha nova. Recalcular o desejado
  * e comparar com o que esta em base e o que torna a ponte auto-corrigivel em
  * vez de acumular duplicados.
  */
 export function reconcilePlan(
-  existing: { externalId: string }[],
+  existing: { externalId: string; amount: string }[],
   desired: BridgeRow[]
-): { toDelete: string[]; toCreate: BridgeRow[] } {
-  // A funcao nunca pode apagar o que nao foi ela a criar, seja qual for a
-  // lista que lhe passarem -- a garantia nao pode depender da disciplina de
-  // quem chama.
-  const existingBridgeIds = existing
-    .map((e) => e.externalId)
-    .filter((id) => id.startsWith(BRIDGE_PREFIX));
-
+): BridgePlan {
+  // A funcao nunca pode apagar nem actualizar o que nao foi ela a criar, seja
+  // qual for a lista que lhe passarem -- a garantia nao pode depender da
+  // disciplina de quem chama.
+  const mine = existing.filter((e) => e.externalId.startsWith(BRIDGE_PREFIX));
+  const amounts = new Map(mine.map((e) => [e.externalId, e.amount]));
   const desiredIds = new Set(desired.map((d) => d.externalId));
-  const existingIds = new Set(existingBridgeIds);
 
   return {
-    toDelete: existingBridgeIds.filter((id) => !desiredIds.has(id)),
-    toCreate: desired.filter((d) => !existingIds.has(d.externalId)),
+    toDelete: mine.map((e) => e.externalId).filter((id) => !desiredIds.has(id)),
+    toCreate: desired.filter((d) => !amounts.has(d.externalId)),
+    // Decimal e nao comparacao de strings: os dois lados sao produzidos por
+    // toFixed(2), mas "-0.00" e "0.00" sao a mesma quantia escrita de duas
+    // maneiras, e um mes de juros que se anule daria uma actualizacao eterna.
+    toUpdate: desired.filter((d) => {
+      const current = amounts.get(d.externalId);
+      return current !== undefined && !new Prisma.Decimal(current).equals(d.amount);
+    }),
   };
 }
 
@@ -198,11 +264,17 @@ export type BridgeRepo = {
     userId: string
   ): Promise<{ year: number; month: number } | null>;
   bridgeSource(userId: string): Promise<BridgeSource>;
-  existingBridgeIds(userId: string): Promise<{ externalId: string }[]>;
+  /**
+   * Traz o valor e nao so o identificador: sem ele o reconcilePlan nao tem
+   * como saber que o agregado mensal dos juros mudou desde a ultima corrida.
+   */
+  existingBridgeRows(
+    userId: string
+  ): Promise<{ externalId: string; amount: string }[]>;
   applyBridge(
     userId: string,
-    plan: { toDelete: string[]; toCreate: BridgeRow[] }
-  ): Promise<{ created: number; deleted: number }>;
+    plan: BridgePlan
+  ): Promise<{ created: number; deleted: number; updated: number }>;
 };
 
 /**
@@ -220,10 +292,10 @@ export async function runBridge(
   userId: string,
   repo: BridgeRepo,
   explicitCutoff: string | null
-): Promise<{ created: number; deleted: number }> {
+): Promise<{ created: number; deleted: number; updated: number }> {
   const cutoff =
     explicitCutoff ?? derivedCutoff(await repo.lastExcelMonth(userId));
   const desired = bridgeRows(await repo.bridgeSource(userId), cutoff);
-  const plan = reconcilePlan(await repo.existingBridgeIds(userId), desired);
+  const plan = reconcilePlan(await repo.existingBridgeRows(userId), desired);
   return repo.applyBridge(userId, plan);
 }

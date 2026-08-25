@@ -21,7 +21,7 @@ import {
 import { buildSnapshot, todayInLisbon, type SnapshotRow } from "./t212.snapshot";
 import {
   runBridge,
-  type BridgeRow,
+  type BridgePlan,
   type BridgeSource,
 } from "./t212.bridge";
 
@@ -68,11 +68,13 @@ export type SyncRepo = {
     userId: string
   ): Promise<{ year: number; month: number } | null>;
   bridgeSource(userId: string): Promise<BridgeSource>;
-  existingBridgeIds(userId: string): Promise<{ externalId: string }[]>;
+  existingBridgeRows(
+    userId: string
+  ): Promise<{ externalId: string; amount: string }[]>;
   applyBridge(
     userId: string,
-    plan: { toDelete: string[]; toCreate: BridgeRow[] }
-  ): Promise<{ created: number; deleted: number }>;
+    plan: BridgePlan
+  ): Promise<{ created: number; deleted: number; updated: number }>;
 };
 
 export type StageReport = {

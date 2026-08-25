@@ -43,8 +43,8 @@ function fakeRepo(overrides: Partial<SyncRepo> = {}): SyncRepo {
     setState: vi.fn(async () => {}),
     lastExcelMonth: vi.fn(async () => null),
     bridgeSource: vi.fn(async () => ({ cashflows: [], dividends: [] })),
-    existingBridgeIds: vi.fn(async () => []),
-    applyBridge: vi.fn(async () => ({ created: 0, deleted: 0 })),
+    existingBridgeRows: vi.fn(async () => []),
+    applyBridge: vi.fn(async () => ({ created: 0, deleted: 0, updated: 0 })),
     ...overrides,
   };
 }
@@ -273,10 +273,10 @@ describe("syncAll", () => {
     // applyBridge por contexto, e mock.calls[0] fica com tupla vazia no tsc
     // (o vitest, via esbuild, nao denuncia -- so o tsc --noEmit apanha isto).
     const applyBridge = vi.fn(
-      async (_userId: string, _plan: { toDelete: string[]; toCreate: unknown[] }) => ({
-        created: 1,
-        deleted: 0,
-      })
+      async (
+        _userId: string,
+        _plan: { toDelete: string[]; toCreate: unknown[]; toUpdate: unknown[] }
+      ) => ({ created: 1, deleted: 0, updated: 0 })
     );
     const repo = fakeRepo({
       applyBridge,
@@ -417,10 +417,10 @@ describe("syncAll", () => {
     // written:0, ok:true escondia quarenta transaccoes apagadas -- indistinguivel
     // de a ponte nao ter feito nada.
     const applyBridge = vi.fn(
-      async (_userId: string, _plan: { toDelete: string[]; toCreate: unknown[] }) => ({
-        created: 0,
-        deleted: 40,
-      })
+      async (
+        _userId: string,
+        _plan: { toDelete: string[]; toCreate: unknown[]; toUpdate: unknown[] }
+      ) => ({ created: 0, deleted: 40, updated: 0 })
     );
     const repo = fakeRepo({ applyBridge });
     const client = fakeClient({});

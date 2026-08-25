@@ -200,16 +200,28 @@ export const prismaRepo: SyncRepo = {
     };
   },
 
-  async existingBridgeIds(userId) {
-    return prisma.transaction.findMany({
+  async existingBridgeRows(userId) {
+    const rows = await prisma.transaction.findMany({
       where: { userId, source: "api", externalId: { startsWith: BRIDGE_PREFIX } },
-      select: { externalId: true },
-    }) as Promise<{ externalId: string }[]>;
+      select: { externalId: true, amount: true },
+    });
+
+    // toFixed(2) dos dois lados: e assim que o bridgeRows produz o valor
+    // desejado, e comparar duas escritas diferentes da mesma quantia dava uma
+    // actualizacao a cada corrida.
+    return rows.map((r) => ({
+      externalId: r.externalId as string,
+      amount: r.amount.toFixed(2),
+    }));
   },
 
   async applyBridge(userId, plan) {
-    if (plan.toDelete.length === 0 && plan.toCreate.length === 0) {
-      return { created: 0, deleted: 0 };
+    if (
+      plan.toDelete.length === 0 &&
+      plan.toCreate.length === 0 &&
+      plan.toUpdate.length === 0
+    ) {
+      return { created: 0, deleted: 0, updated: 0 };
     }
 
     return prisma.$transaction(
@@ -274,7 +286,28 @@ export const prismaRepo: SyncRepo = {
             ).count
           : 0;
 
-        return { created, deleted };
+        // Um updateMany por linha, e nao um em bloco: cada uma leva um valor
+        // diferente. Sao os meses de juros, portanto uma mao cheia por
+        // corrida -- nao vale a pena mais do que isto.
+        //
+        // O prefixo repete-se aqui pelo mesmo motivo que no deleteMany: a
+        // garantia de nao mexer no que nao e da ponte nao pode depender de
+        // quem chama.
+        let updated = 0;
+        for (const row of plan.toUpdate) {
+          updated += (
+            await tx.transaction.updateMany({
+              where: {
+                userId,
+                source: "api",
+                externalId: { equals: row.externalId, startsWith: BRIDGE_PREFIX },
+              },
+              data: { amount: dec(row.amount) },
+            })
+          ).count;
+        }
+
+        return { created, deleted, updated };
       },
       // Explicito em vez de confiar no omisso de 5s: mesmo com as categorias
       // resolvidas de antemao, um createMany de centenas de linhas junto com
