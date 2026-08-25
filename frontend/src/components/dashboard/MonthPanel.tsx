@@ -4,6 +4,7 @@ import { KpiCard } from "./KpiCard";
 import { GroupComposition } from "./GroupComposition";
 import { CategoryDeltas } from "./CategoryDeltas";
 import { MonthPurchases } from "./MonthPurchases";
+import { InvestmentsOverview } from "./InvestmentsOverview";
 import { formatEur, formatPercent } from "@/lib/format";
 import { deltaVsAverage } from "@/lib/budget-metrics";
 import type { MonthDetail, MonthAverages } from "@/lib/budget-metrics";
@@ -71,6 +72,12 @@ export function MonthPanel({
           <CategoryDeltas deltas={deltas} />
         </div>
       </div>
+
+      {/* Por baixo da linha "Where it went" / "Unusual this month", onde ele o
+          quis. Nota para quem vier a seguir: os numeros deste cartao sao da
+          carteira inteira e nao do mes em foco -- e o unico bloco deste painel
+          que nao muda quando se troca de mes. */}
+      <InvestmentsOverview />
 
       {/* Largura toda e nao ao lado dos outros dois: as etiquetas sao texto
           livre do utilizador e nao cabem numa meia coluna. */}

@@ -18,7 +18,6 @@ import { DashboardSkeleton } from "../../src/components/dashboard/DashboardSkele
 import { FolderScanNotice } from "../../src/components/dashboard/FolderScanNotice";
 import { AddExpenseBar } from "../../src/components/dashboard/AddExpenseBar";
 import { PendingNotice } from "../../src/components/dashboard/PendingNotice";
-import { InvestmentsOverview } from "../../src/components/dashboard/InvestmentsOverview";
 import { fetchGrid } from "../../src/services/budget.service";
 import { scanFolder } from "../../src/services/folder-scan.service";
 import { flushPending } from "../../src/services/expense.service";
@@ -306,15 +305,6 @@ export default function DashboardPage() {
             emptyMessage="No expenses this year"
           />
         </div>
-
-        {/* A seguir ao "Where it went this year" e antes do detalhe do mes: o
-            ano inteiro primeiro, depois o mes em foco. Estava no fim da pagina.
-
-            Isto poe o cartao dentro do ramo do caminho feliz, portanto ele
-            desaparece num ano sem movimento ou numa falha a ler a grelha. O
-            preco de o ter aqui; a ligacao "Investments" do cabecalho continua
-            la nesses casos. */}
-        <InvestmentsOverview />
 
         <MonthPanel
           detail={detail}
