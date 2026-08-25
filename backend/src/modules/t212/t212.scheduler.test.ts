@@ -34,4 +34,15 @@ describe("pickUserId", () => {
     expect(out.userId).toBeNull();
     expect(out.reason).toContain("ninguem@exemplo.pt");
   });
+
+  it("duas contas com o mesmo email em caixa diferente nao escolhe a primeira", () => {
+    // O schema nao normaliza a caixa do email no registo, portanto isto e
+    // alcancavel: duas contas distintas no Postgres que colidem so em
+    // minusculas. Escolher a primeira seria a mesma aposta silenciosa que a
+    // ambiguidade sem T212_USER_EMAIL ja recusa.
+    const ruiMaiusculo = { id: "u3", email: "Rui@Exemplo.pt" };
+    const out = pickUserId([ana, rui, ruiMaiusculo], "rui@exemplo.pt");
+    expect(out.userId).toBeNull();
+    expect(out.reason).toContain("rui@exemplo.pt");
+  });
 });

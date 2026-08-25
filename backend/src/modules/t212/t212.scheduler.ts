@@ -14,9 +14,20 @@ export function pickUserId(
 
   if (configuredEmail) {
     const wanted = configuredEmail.toLowerCase();
-    const match = users.find((u) => u.email.toLowerCase() === wanted);
-    return match
-      ? { userId: match.id, reason: "Utilizador escolhido por T212_USER_EMAIL" }
+    const matches = users.filter((u) => u.email.toLowerCase() === wanted);
+
+    if (matches.length > 1) {
+      // O registo nao normaliza a caixa do email, portanto duas contas podem
+      // colidir so em minusculas. Escolher a primeira seria a mesma aposta
+      // silenciosa que a ambiguidade sem T212_USER_EMAIL ja recusa.
+      return {
+        userId: null,
+        reason: `Ha varias contas com o email ${configuredEmail} a diferir so na caixa -- sincronizacao suspensa`,
+      };
+    }
+
+    return matches.length === 1
+      ? { userId: matches[0].id, reason: "Utilizador escolhido por T212_USER_EMAIL" }
       : {
           userId: null,
           reason: `T212_USER_EMAIL aponta para ${configuredEmail}, que nao existe`,
