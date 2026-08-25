@@ -75,9 +75,23 @@ export default function InvestimentosPage() {
           ? { tone: falhadas.length ? "error" : "info", message: linhas.join(" ") }
           : null
       );
-      // Tudo o que a pagina mostra vem do espelho, portanto tudo re-le.
-      queryClient.invalidateQueries({ queryKey: ["t212-overview"] });
-      queryClient.invalidateQueries({ queryKey: ["t212-chart"] });
+      // Tudo o que a pagina mostra vem do espelho, portanto tudo re-le -- as
+      // cinco chaves, nao so as duas do topo. Os dividendos, as ordens e a caixa
+      // eram as tabelas que o primeiro backfill enche, e ficavam vazias depois
+      // de sincronizar sem nada a sugerir um refrescamento.
+      //
+      // As tres ultimas chaves levam parametros a seguir (ano, filtros, pagina).
+      // O React Query faz correspondencia por prefixo, portanto a primeira
+      // parte da chave chega para invalidar todas as paginas e filtros.
+      for (const chave of [
+        "t212-overview",
+        "t212-chart",
+        "t212-dividends",
+        "t212-orders",
+        "t212-cashflows",
+      ]) {
+        queryClient.invalidateQueries({ queryKey: [chave] });
+      }
     },
     onError: (err: unknown) => {
       // 409 nao e erro: o servidor recusou porque ja ha uma corrida a decorrer
