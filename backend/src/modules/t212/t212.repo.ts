@@ -194,7 +194,7 @@ export const prismaRepo: SyncRepo = {
 
   async existingBridgeIds(userId) {
     return prisma.transaction.findMany({
-      where: { userId, source: "api", externalId: { startsWith: "t212:" } },
+      where: { userId, source: "api", externalId: { startsWith: BRIDGE_PREFIX } },
       select: { externalId: true },
     }) as Promise<{ externalId: string }[]>;
   },

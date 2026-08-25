@@ -8,6 +8,7 @@ import {
 import { compareScope } from "./budget.verify";
 import type { MonthComparison, StructureReport } from "./budget.verify";
 import { diffCells, type DiffCell, type WorkbookDiff } from "./budget.diff";
+import { toDisplay } from "./budget.grid";
 
 export type ImportResult = {
   year: number;
@@ -161,8 +162,7 @@ async function writeAndVerify(
     if (!t.category) continue;
     const month = t.date.getUTCMonth();
     // Desfaz a inversao de sinal, para comparar na convencao da folha.
-    const value =
-      t.category.section === "income" ? t.amount : t.amount.negated();
+    const value = toDisplay(t.category.section, t.amount);
 
     const sKey = t.category.section;
     if (!sectionTotals.has(sKey)) sectionTotals.set(sKey, zeros());
@@ -259,7 +259,7 @@ export async function previewBudgetWorkbook(
         name: t.category.name,
         month: t.date.getUTCMonth() + 1,
         // Desfaz a inversao de sinal, para comparar na convencao da folha.
-        value: t.category.section === "income" ? t.amount : t.amount.negated(),
+        value: toDisplay(t.category.section, t.amount),
       },
     ];
   });

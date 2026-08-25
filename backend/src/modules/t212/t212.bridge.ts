@@ -1,3 +1,5 @@
+import { Prisma } from "@prisma/client";
+import { toStored } from "../budget/budget.grid";
 import type { CashFlowKind } from "./t212.map";
 
 export type BridgeSection = "income" | "savings" | "expenses";
@@ -83,6 +85,19 @@ export function crossesToBudget(
   return cutoff === null || date >= cutoff;
 }
 
+/**
+ * O `amount` de um BridgeRow ja vai na convencao de armazenamento do
+ * Transaction, nao na da folha -- e o que o applyBridge grava tal e qual.
+ *
+ * A T212 entrega os movimentos na convencao da folha (um deposito e +500, um
+ * levantamento e -100), e a base de dados guarda `savings`/`expenses`
+ * invertidos. Escrever o valor cru fazia a grelha mostrar -500,00 EUR num
+ * deposito de 500 EUR.
+ */
+function storedAmount(section: BridgeSection, sheetValue: string): string {
+  return toStored(section, new Prisma.Decimal(sheetValue)).toFixed(2);
+}
+
 export function bridgeRows(
   source: BridgeSource,
   cutoff: string | null
@@ -101,7 +116,7 @@ export function bridgeRows(
     rows.push({
       externalId: BRIDGE_PREFIX + c.externalId,
       date,
-      amount: c.amount,
+      amount: storedAmount(category.section, c.amount),
       section: category.section,
       group: category.group,
       name: category.name,
@@ -117,7 +132,7 @@ export function bridgeRows(
     rows.push({
       externalId: BRIDGE_PREFIX + d.externalId,
       date,
-      amount: d.amountInEuro,
+      amount: storedAmount(CATEGORIES.dividends.section, d.amountInEuro),
       section: CATEGORIES.dividends.section,
       group: CATEGORIES.dividends.group,
       name: CATEGORIES.dividends.name,

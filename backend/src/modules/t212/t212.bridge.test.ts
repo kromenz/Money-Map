@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { Prisma } from "@prisma/client";
+import { toDisplay } from "../budget/budget.grid";
 import { bridgeRows, reconcilePlan, derivedCutoff, crossesToBudget, BRIDGE_PREFIX } from "./t212.bridge";
 
 const cashflow = (externalId: string, dateTime: string, type: string, amount: string) =>
@@ -18,24 +20,52 @@ const source = {
 };
 
 describe("bridgeRows", () => {
-  it("um deposito vira poupanca positiva", () => {
+  // O sinal destas asercoes parece invertido de proposito. O bridgeRows nao
+  // devolve o valor como a T212 o entrega (convencao da folha): devolve-o ja na
+  // convencao de armazenamento do Transaction, a mesma que o toStored do
+  // budget.grid.ts impoe ao import do Excel -- `savings` e `expenses` gravam-se
+  // com o sinal trocado, `income` grava-se tal e qual.
+  //
+  // Ate a correccao C1 estes testes fixavam o valor cru ("500.00" num
+  // deposito), e por causa disso a grelha do orcamento mostrava -500,00 EUR
+  // numa poupanca de 500 EUR. Quem achar que o "-500.00" aqui e um erro deve
+  // ler o toStored primeiro: a grelha desfaz esta inversao ao ler.
+  it("um deposito grava-se como poupanca negativa, que a grelha mostra a positivo", () => {
     const row = bridgeRows(source, null).find((r) => r.externalId === `${BRIDGE_PREFIX}d-1`);
-    expect(row).toMatchObject({ section: "savings", amount: "500.00", date: "2026-09-03" });
+    expect(row).toMatchObject({ section: "savings", amount: "-500.00", date: "2026-09-03" });
   });
 
-  it("um levantamento vira poupanca negativa", () => {
+  it("um levantamento grava-se positivo, que a grelha mostra a negativo", () => {
     const row = bridgeRows(source, null).find((r) => r.externalId === `${BRIDGE_PREFIX}w-1`);
-    expect(row).toMatchObject({ section: "savings", amount: "-100.00" });
+    expect(row).toMatchObject({ section: "savings", amount: "100.00" });
   });
 
-  it("dividendos e juros viram receita", () => {
+  it("dividendos e juros viram receita, onde as duas convencoes coincidem", () => {
     const rows = bridgeRows(source, null);
     expect(rows.find((r) => r.externalId === `${BRIDGE_PREFIX}div-1`)).toMatchObject({
       section: "income",
       amount: "1.31",
       merchant: "AAPL_US_EQ",
     });
-    expect(rows.find((r) => r.externalId === `${BRIDGE_PREFIX}i-1`)).toMatchObject({ section: "income" });
+    expect(rows.find((r) => r.externalId === `${BRIDGE_PREFIX}i-1`)).toMatchObject({
+      section: "income",
+      amount: "1.20",
+    });
+  });
+
+  it("o que a ponte grava, a grelha mostra na convencao da folha", () => {
+    // A garantia que interessa ao utilizador nao e o sinal em base: e que o
+    // numero que ele ve bate com o extracto do broker. toDisplay e a leitura
+    // que a grelha faz, portanto e aqui que se fecha o circuito.
+    const rows = bridgeRows(source, null);
+    const visto = (id: string) => {
+      const row = rows.find((r) => r.externalId === `${BRIDGE_PREFIX}${id}`)!;
+      return toDisplay(row.section, new Prisma.Decimal(row.amount)).toFixed(2);
+    };
+
+    expect(visto("d-1")).toBe("500.00");
+    expect(visto("w-1")).toBe("-100.00");
+    expect(visto("div-1")).toBe("1.31");
   });
 
   it("taxas e transferencias nao atravessam", () => {

@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { toStored } from "./budget.grid";
 
 export type Section = "income" | "savings" | "expenses";
 
@@ -89,8 +90,13 @@ function findHeaderRow(ws: ExcelJS.Worksheet): number {
   );
 }
 
+/**
+ * A regra de sinal nao vive aqui -- vive no toStored do budget.grid.ts, que e a
+ * fonte unica da convencao de armazenamento. Esta funcao continua exportada
+ * porque o import usa-a com o `Section` do parser, mas nao decide nada.
+ */
 export function signedAmount(section: Section, sheetValue: number): number {
-  return section === "income" ? sheetValue : -sheetValue;
+  return toStored(section, sheetValue);
 }
 
 function monthValues(ws: ExcelJS.Worksheet, row: number): (number | null)[] {
