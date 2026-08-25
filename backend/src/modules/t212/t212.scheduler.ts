@@ -2,7 +2,7 @@ import { prisma } from "../../db/prisma";
 import { loadT212Config } from "./t212.config";
 import { createClient } from "./t212.client";
 import { prismaRepo } from "./t212.repo";
-import { syncAll, type SyncReport } from "./t212.sync";
+import { syncAll, type SyncDeps, type SyncReport } from "./t212.sync";
 
 export function pickUserId(
   users: { id: string; email: string }[],
@@ -54,14 +54,54 @@ export async function resolveUserId(): Promise<{
   return pickUserId(users, cfg.userEmail);
 }
 
-export async function runSyncNow(userId: string): Promise<SyncReport> {
-  const cfg = loadT212Config();
-  return syncAll(userId, {
-    client: createClient(cfg),
-    repo: prismaRepo,
-    now: () => new Date(),
-    cutoff: cfg.bridgeFrom,
-  });
+/**
+ * A bandeira e do modulo, nao do agendador.
+ *
+ * Enquanto viveu dentro do startT212Scheduler, fechava o tick contra si proprio
+ * e mais nada: o botao "Sincronizar agora" chama o runSyncNow directamente e
+ * passava-lhe ao lado. Duas corridas em paralelo constroem dois clientes, cada
+ * um com o seu governo de limites, que se ignoram -- e o limite da T212 e por
+ * conta, nao por cliente. Correr as etapas em serie foi decisao explicita da
+ * spec; ter duas corridas ao mesmo tempo desfazia-a por fora.
+ */
+let syncing = false;
+
+/** Nao e uma falha da sincronizacao: e a outra corrida a dizer que ja vai. */
+export class SyncInProgressError extends Error {
+  constructor() {
+    super("Ja esta uma sincronizacao a decorrer");
+    this.name = "SyncInProgressError";
+  }
+}
+
+export function isSyncing(): boolean {
+  return syncing;
+}
+
+export async function runSyncNow(
+  userId: string,
+  // Existe para o teste poder correr o guarda sem rede. O controlador e o tick
+  // nunca passam nada -- as dependencias reais sao as de baixo.
+  overrides: Partial<SyncDeps> = {}
+): Promise<SyncReport> {
+  // A verificacao e a marca ficam no mesmo turno sincrono, antes do primeiro
+  // await: e o que garante que duas chamadas no mesmo tick do event loop nao
+  // passam ambas.
+  if (syncing) throw new SyncInProgressError();
+  syncing = true;
+
+  try {
+    const cfg = loadT212Config();
+    return await syncAll(userId, {
+      client: createClient(cfg),
+      repo: prismaRepo,
+      now: () => new Date(),
+      cutoff: cfg.bridgeFrom,
+      ...overrides,
+    });
+  } finally {
+    syncing = false;
+  }
 }
 
 /**
@@ -78,13 +118,12 @@ export function startT212Scheduler(): { stop: () => void } {
     return { stop: () => undefined };
   }
 
-  let running = false;
-
   const tick = async () => {
     // Uma corrida que demore mais que o intervalo nao pode sobrepor-se a
-    // seguinte: duplicaria pedidos e queimaria o limite por conta.
-    if (running) return;
-    running = true;
+    // seguinte: duplicaria pedidos e queimaria o limite por conta. Sair aqui
+    // poupa a consulta ao utilizador; quem garante mesmo a exclusao e o
+    // runSyncNow, que fecha a janela entre esta leitura e a chamada.
+    if (isSyncing()) return;
 
     try {
       const { userId, reason } = await resolveUserId();
@@ -100,9 +139,14 @@ export function startT212Scheduler(): { stop: () => void } {
           (falhadas.length ? ` | erros: ${falhadas.map((s) => s.kind).join(", ")}` : "")
       );
     } catch (err) {
+      // O botao "Sincronizar agora" pode ter entrado entre a leitura de cima e
+      // a chamada. Nao e uma falha da sincronizacao -- a outra corrida esta a
+      // fazer o trabalho.
+      if (err instanceof SyncInProgressError) {
+        console.log("[t212] tick saltado: ja havia uma sincronizacao a decorrer");
+        return;
+      }
       console.error("[t212] sync falhou por inteiro", err);
-    } finally {
-      running = false;
     }
   };
 

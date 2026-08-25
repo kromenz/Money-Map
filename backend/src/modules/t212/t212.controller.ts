@@ -1,6 +1,6 @@
 import { RequestHandler } from "express";
 import { loadT212Config } from "./t212.config";
-import { runSyncNow } from "./t212.scheduler";
+import { runSyncNow, SyncInProgressError } from "./t212.scheduler";
 import { getCashFlows, getChart, getDividends, getOrders, getOverview } from "./t212.service";
 import { dividendsQuerySchema, listQuerySchema, ordersQuerySchema } from "./t212.http.schemas";
 
@@ -80,6 +80,16 @@ export const syncNow: RequestHandler = async (req, res, next) => {
     // relatorio diz exactamente o que correu mal em cada uma.
     res.json(await runSyncNow((req as any).userId));
   } catch (err) {
+    // 409 e nao 500: nada correu mal, so ja ha uma corrida a fazer o trabalho.
+    // O limite de pedidos da T212 e por conta, portanto duas corridas em
+    // paralelo queimavam-no uma contra a outra.
+    if (err instanceof SyncInProgressError) {
+      res.status(409).json({
+        error:
+          "Ja esta uma sincronizacao a decorrer. Espere que termine antes de pedir outra.",
+      });
+      return;
+    }
     next(err);
   }
 };
