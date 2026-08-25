@@ -70,7 +70,13 @@ export function money(n: number): string {
   // 1.005 mas -1.00 para -1.005. Dinheiro tem de arredondar igual dos dois
   // lados do zero, senao os negativos -- compras, levantamentos, taxas --
   // acumulam um enviesamento de meio centimo num so sentido.
-  const rounded = Math.sign(scaled) * Math.round(Math.abs(scaled) + 1e-6);
+  //
+  // Epsilon = 1e-9: o ruido de IEEE 754 para estas magnitudes esta na ordem
+  // de 1e-14 (eg. 1.005 * 100 = 100.49999999999999, ~1.4e-14 abaixo). O epsilon
+  // e mil vezes maior, mantendo margem adequada contra representacao, mas
+  // pequeno o bastante (1e-11 de moeda) para nao empurrar para cima valores
+  // genuinamente abaixo da fronteira de meio centimo.
+  const rounded = Math.sign(scaled) * Math.round(Math.abs(scaled) + 1e-9);
   return (rounded / 100).toFixed(2);
 }
 

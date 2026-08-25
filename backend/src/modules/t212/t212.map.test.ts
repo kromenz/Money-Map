@@ -30,6 +30,13 @@ describe("money e qty", () => {
     expect(money(-176.2)).toBe("-176.20");
     expect(money(-0.7)).toBe("-0.70");
   });
+
+  it("nao empurra para cima valores genuinamente abaixo de meio centimo", () => {
+    // Valores calculados (quantidade * preco) produzem precisao real nesta zona.
+    // 0.00499999 esta mesmo abaixo de meio centimo, nao e ruido de representacao.
+    expect(money(0.00499999)).toBe("0.00");
+    expect(money(-0.00499999)).toBe("0.00"); // Nao deve ser "-0.00"
+  });
 });
 
 describe("toHoldingRows", () => {
