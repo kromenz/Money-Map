@@ -1,7 +1,16 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { Prisma } from "@prisma/client";
 import { toDisplay } from "../budget/budget.grid";
-import { bridgeRows, reconcilePlan, derivedCutoff, crossesToBudget, BRIDGE_PREFIX } from "./t212.bridge";
+import {
+  bridgeRows,
+  reconcilePlan,
+  derivedCutoff,
+  crossesToBudget,
+  runBridge,
+  BRIDGE_PREFIX,
+  type BridgeRepo,
+  type BridgeRow,
+} from "./t212.bridge";
 
 const cashflow = (externalId: string, dateTime: string, type: string, amount: string) =>
   ({ externalId, dateTime, type, amount } as never);
@@ -163,5 +172,75 @@ describe("reconcilePlan", () => {
 
     expect(plan.toDelete).not.toContain("manual-1");
     expect(plan.toDelete).toEqual([]);
+  });
+});
+
+describe("runBridge", () => {
+  // O trio corte -> plano -> aplicacao tem dois chamadores: a etapa `bridge` do
+  // syncAll e o fim do importBudgetWorkbook. E aqui, na funcao partilhada, que
+  // se fixa o comportamento -- o import so lhe passa o repositorio real.
+  const fakeRepo = (
+    over: Partial<BridgeRepo> = {}
+  ): BridgeRepo & {
+    applyBridge: ReturnType<typeof vi.fn>;
+  } => ({
+    lastExcelMonth: vi.fn(async () => ({ year: 2026, month: 9 })),
+    bridgeSource: vi.fn(async () => source as never),
+    existingBridgeIds: vi.fn(async () => [] as { externalId: string }[]),
+    applyBridge: vi.fn(
+      async (
+        _userId: string,
+        _plan: { toDelete: string[]; toCreate: BridgeRow[] }
+      ) => ({ created: 0, deleted: 0 })
+    ),
+    ...over,
+  } as BridgeRepo & { applyBridge: ReturnType<typeof vi.fn> });
+
+  it("sem corte explicito deriva-o do ultimo mes do Excel", async () => {
+    // O Excel cobre ate Setembro de 2026, portanto o corte e 2026-10-01 e nada
+    // de Setembro atravessa.
+    const repo = fakeRepo();
+    await runBridge("u1", repo, null);
+
+    const plan = repo.applyBridge.mock.calls[0][1] as { toCreate: BridgeRow[] };
+    expect(plan.toCreate).toEqual([]);
+  });
+
+  it("o corte explicito do .env ganha ao derivado", async () => {
+    const repo = fakeRepo();
+    await runBridge("u1", repo, "2026-09-13");
+
+    const plan = repo.applyBridge.mock.calls[0][1] as { toCreate: BridgeRow[] };
+    expect(plan.toCreate.map((r) => r.externalId)).toEqual([
+      `${BRIDGE_PREFIX}i-1`,
+      `${BRIDGE_PREFIX}div-1`,
+    ]);
+  });
+
+  it("um corte que avancou apaga o que a ponte tinha criado nesse mes", async () => {
+    // Este e o caso que motiva correr o trio tambem no fim do import da folha:
+    // a folha passou a cobrir Setembro, e as linhas que a ponte criou para
+    // Setembro passam a estar representadas duas vezes na grelha.
+    const jaCriadas = bridgeRows(source, null).map((r) => ({
+      externalId: r.externalId,
+    }));
+    const repo = fakeRepo({
+      existingBridgeIds: vi.fn(async () => jaCriadas),
+      applyBridge: vi.fn(async () => ({ created: 0, deleted: jaCriadas.length })),
+    });
+
+    const applied = await runBridge("u1", repo, null);
+
+    const plan = repo.applyBridge.mock.calls[0][1] as { toDelete: string[] };
+    expect(plan.toDelete).toHaveLength(jaCriadas.length);
+    expect(applied.deleted).toBe(jaCriadas.length);
+  });
+
+  it("devolve o que o repositorio aplicou, para o relatorio poder mostra-lo", async () => {
+    const repo = fakeRepo({
+      applyBridge: vi.fn(async () => ({ created: 3, deleted: 7 })),
+    });
+
+    expect(await runBridge("u1", repo, null)).toEqual({ created: 3, deleted: 7 });
   });
 });

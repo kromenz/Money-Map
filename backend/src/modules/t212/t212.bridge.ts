@@ -168,3 +168,44 @@ export function reconcilePlan(
     toCreate: desired.filter((d) => !existingIds.has(d.externalId)),
   };
 }
+
+/**
+ * O que a etapa `bridge` do syncAll precisa do repositorio, e nada mais. O
+ * SyncRepo satisfaz esta forma; declara-la aqui e o que permite ao import da
+ * folha correr a mesma reconciliacao sem arrastar o modulo de sincronizacao
+ * inteiro atras dela.
+ */
+export type BridgeRepo = {
+  lastExcelMonth(
+    userId: string
+  ): Promise<{ year: number; month: number } | null>;
+  bridgeSource(userId: string): Promise<BridgeSource>;
+  existingBridgeIds(userId: string): Promise<{ externalId: string }[]>;
+  applyBridge(
+    userId: string,
+    plan: { toDelete: string[]; toCreate: BridgeRow[] }
+  ): Promise<{ created: number; deleted: number }>;
+};
+
+/**
+ * O trio corte -> plano -> aplicacao, num sitio so.
+ *
+ * Tem dois chamadores: a etapa `bridge` do syncAll e o fim do
+ * importBudgetWorkbook. Sao os dois momentos em que o corte pode ter mudado --
+ * a sincronizacao traz movimentos novos, a importacao faz o corte avancar --
+ * e um deles a correr uma versao propria desta sequencia era como a ponte
+ * ficaria outra vez fora de passo com o orcamento.
+ *
+ * `explicitCutoff` e o corte do .env; null manda deriva-lo do Excel.
+ */
+export async function runBridge(
+  userId: string,
+  repo: BridgeRepo,
+  explicitCutoff: string | null
+): Promise<{ created: number; deleted: number }> {
+  const cutoff =
+    explicitCutoff ?? derivedCutoff(await repo.lastExcelMonth(userId));
+  const desired = bridgeRows(await repo.bridgeSource(userId), cutoff);
+  const plan = reconcilePlan(await repo.existingBridgeIds(userId), desired);
+  return repo.applyBridge(userId, plan);
+}

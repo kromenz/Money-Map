@@ -20,9 +20,7 @@ import {
 } from "./t212.map";
 import { buildSnapshot, todayInLisbon, type SnapshotRow } from "./t212.snapshot";
 import {
-  bridgeRows,
-  derivedCutoff,
-  reconcilePlan,
+  runBridge,
   type BridgeRow,
   type BridgeSource,
 } from "./t212.bridge";
@@ -294,14 +292,7 @@ export async function syncAll(
 
   stages.push(
     await stage("bridge", deps, userId, async (report) => {
-      const cutoff =
-        deps.cutoff ?? derivedCutoff(await deps.repo.lastExcelMonth(userId));
-      const desired = bridgeRows(await deps.repo.bridgeSource(userId), cutoff);
-      const plan = reconcilePlan(
-        await deps.repo.existingBridgeIds(userId),
-        desired
-      );
-      const applied = await deps.repo.applyBridge(userId, plan);
+      const applied = await runBridge(userId, deps.repo, deps.cutoff);
       report.written = applied.created;
       // written:0 sozinho nao distingue "nada mudou" de "quarenta transaccoes
       // visiveis ao utilizador desapareceram porque o corte avancou".

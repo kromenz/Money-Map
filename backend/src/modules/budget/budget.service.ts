@@ -9,6 +9,9 @@ import { compareScope } from "./budget.verify";
 import type { MonthComparison, StructureReport } from "./budget.verify";
 import { diffCells, type DiffCell, type WorkbookDiff } from "./budget.diff";
 import { toDisplay } from "./budget.grid";
+import { runBridge } from "../t212/t212.bridge";
+import { loadT212Config } from "../t212/t212.config";
+import { prismaRepo } from "../t212/t212.repo";
 
 export type ImportResult = {
   year: number;
@@ -64,20 +67,51 @@ export async function importBudgetWorkbook(
 ): Promise<ImportResult> {
   const parsed = await parseBudgetWorkbook(buffer, year);
 
+  let result: ImportResult;
   try {
-    return await prisma.$transaction(
+    result = await prisma.$transaction(
       async (tx) => {
-        const result = await writeAndVerify(tx, userId, parsed, year);
-        if (!result.allMatch) throw new ImportMismatch(result);
-        return result;
+        const written = await writeAndVerify(tx, userId, parsed, year);
+        if (!written.allMatch) throw new ImportMismatch(written);
+        return written;
       },
       // Por omissao o Prisma corta aos 5s. O import faz poucas queries mas
       // algumas mexem em centenas de linhas.
       { timeout: 30_000, maxWait: 10_000 }
     );
   } catch (err) {
+    // A importacao reverteu: o corte nao mudou, e nao ha nada a reconciliar.
     if (err instanceof ImportMismatch) return err.result;
     throw err;
+  }
+
+  await reconcileBridgeAfterImport(userId);
+  return result;
+}
+
+/**
+ * O corte da ponte deriva do ultimo mes com transacoes vindas do Excel, e quem
+ * faz esse maximo avancar e precisamente esta importacao -- mas a reconciliacao
+ * so corria dentro do syncAll.
+ *
+ * Sem isto, no instante em que a folha passa a cobrir Outubro a grelha de
+ * Outubro mostra a transferencia da folha E o deposito que a ponte criou antes:
+ * a poupanca do mes fica inflacionada ate a proxima sincronizacao, que pode ser
+ * so quando a pessoa voltar a abrir a app.
+ *
+ * E tudo leitura e escrita local, sem rede. Uma falha aqui nao pode reverter
+ * nem partir a importacao, que ja esta confirmada e verificada ao centimo -- e
+ * por isso que o erro so se regista: o pior caso passa a ser o comportamento
+ * que havia antes, com a proxima sincronizacao a reconciliar.
+ */
+async function reconcileBridgeAfterImport(userId: string): Promise<void> {
+  try {
+    await runBridge(userId, prismaRepo, loadT212Config().bridgeFrom);
+  } catch (err) {
+    console.error(
+      "[budget] import feito, mas a reconciliacao da ponte T212 falhou",
+      err
+    );
   }
 }
 
