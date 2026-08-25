@@ -115,6 +115,18 @@ model Transaction {
   source         TxSource
   externalId     String?
   notes          String?
+  /**
+   * Quanto desta linha ja esta escrito na folha do Excel.
+   *
+   * So as linhas da ponte do Trading 212 o usam; nas de origem `excel` nao faz
+   * sentido, porque essas vieram da folha. Null quer dizer "nada escrito
+   * ainda"; o que falta escrever e sempre `amount - sheetAmount`.
+   *
+   * E um valor e nao um booleano por causa do agregado mensal dos juros, que
+   * cresce enquanto o mes corre: a folha soma por incrementos, portanto o que
+   * se escreve na segunda vez e so a diferenca.
+   */
+  sheetAmount    Decimal?  @db.Decimal(12, 2)
   createdAt      DateTime  @default(now())
 
   @@unique([userId, externalId])

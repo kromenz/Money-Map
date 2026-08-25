@@ -10,6 +10,7 @@ import {
   runBridge,
   BRIDGE_PREFIX,
   INTEREST_PREFIX,
+  effectiveCutoff,
   type BridgeRepo,
   type BridgeRow,
 } from "./t212.bridge";
@@ -260,6 +261,38 @@ describe("excelMonthCap", () => {
   });
 });
 
+describe("effectiveCutoff", () => {
+  // Os dois cortes nao querem dizer a mesma coisa: o do .env e um chao posto a
+  // mao, o derivado e a fronteira do que a folha ja cobre. Antes de a ponte
+  // escrever no .xlsx o explicito simplesmente ganhava, e chegava.
+  it("o mais tarde dos dois ganha", () => {
+    expect(effectiveCutoff("2026-09-01", "2026-10-01")).toBe("2026-10-01");
+    expect(effectiveCutoff("2026-11-01", "2026-10-01")).toBe("2026-11-01");
+  });
+
+  it("sem chao no .env fica o derivado", () => {
+    expect(effectiveCutoff(null, "2026-10-01")).toBe("2026-10-01");
+  });
+
+  it("sem folha nenhuma fica o chao do .env", () => {
+    expect(effectiveCutoff("2026-09-01", null)).toBe("2026-09-01");
+  });
+
+  it("sem nenhum dos dois nao ha corte e entra tudo", () => {
+    expect(effectiveCutoff(null, null)).toBeNull();
+  });
+
+  it("o chao nao segura a fronteira quando a folha avanca", () => {
+    // O caso que motiva a funcao: a ponte escreve Setembro na folha, a
+    // importacao seguinte traz Setembro como `source: excel`, e com o corte
+    // preso no chao as linhas `source: api` de Setembro ficavam la ao lado --
+    // o mes contado duas vezes na grelha.
+    const chao = "2026-09-01";
+    const folhaCobreSetembro = derivedCutoff({ year: 2026, month: 9 });
+    expect(effectiveCutoff(chao, folhaCobreSetembro)).toBe("2026-10-01");
+  });
+});
+
 describe("derivedCutoff", () => {
   it("o corte e o dia seguinte ao ultimo mes coberto pelo Excel", () => {
     expect(derivedCutoff({ year: 2026, month: 4 })).toBe("2026-05-01");
@@ -411,8 +444,12 @@ describe("runBridge", () => {
     expect(plan.toCreate).toEqual([]);
   });
 
-  it("o corte explicito do .env ganha ao derivado", async () => {
-    const repo = fakeRepo();
+  it("o chao do .env ganha quando e mais tarde do que o derivado", async () => {
+    // A folha so cobre ate Abril, portanto o derivado e 2026-05-01; o chao
+    // posto a mao e mais tarde e e ele que manda.
+    const repo = fakeRepo({
+      lastExcelMonth: vi.fn(async () => ({ year: 2026, month: 4 })),
+    });
     await runBridge("u1", repo, "2026-09-13");
 
     const plan = repo.applyBridge.mock.calls[0][1] as { toCreate: BridgeRow[] };
@@ -420,6 +457,18 @@ describe("runBridge", () => {
       `${INTEREST_PREFIX}2026-09`,
       `${BRIDGE_PREFIX}div-1`,
     ]);
+  });
+
+  it("o derivado ganha quando a folha ja passou o chao do .env", async () => {
+    // O caso que a escrita no .xlsx trouxe: a ponte escreveu Setembro na
+    // folha, a importacao trouxe Setembro para a base, e o chao de Setembro
+    // deixou de ser a fronteira certa -- manter as linhas `source: api` desse
+    // mes contava-o duas vezes na grelha.
+    const repo = fakeRepo();
+    await runBridge("u1", repo, "2026-09-01");
+
+    const plan = repo.applyBridge.mock.calls[0][1] as { toCreate: BridgeRow[] };
+    expect(plan.toCreate).toEqual([]);
   });
 
   it("um corte que avancou apaga o que a ponte tinha criado nesse mes", async () => {

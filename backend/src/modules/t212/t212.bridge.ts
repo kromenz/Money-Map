@@ -91,6 +91,33 @@ export function excelMonthCap(now: Date): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
 }
 
+/**
+ * O corte efectivo: o mais tarde dos dois.
+ *
+ * Os dois nao querem dizer a mesma coisa e por isso nao se substituem. O do
+ * `.env` (T212_BRIDGE_FROM) e um chao -- "nunca mexas em nada antes desta
+ * data", posto a mao para a folha antiga nao ser tocada. O derivado e a
+ * fronteira do que a folha ja cobre.
+ *
+ * Ate a ponte passar a escrever no `.xlsx`, o explicito simplesmente ganhava
+ * ao derivado, e isso chegava. Deixou de chegar: a ponte escreve Setembro na
+ * folha, a importacao seguinte traz Setembro para a base como `source: excel`,
+ * e com o corte preso no chao as linhas `source: api` de Setembro ficavam la
+ * ao lado das novas -- o mes contado duas vezes na grelha. Com o mais tarde
+ * dos dois, a fronteira avanca com a folha e a reconciliacao apaga as linhas
+ * que a folha passou a representar, que e exactamente para o que ela existe.
+ */
+export function effectiveCutoff(
+  explicit: string | null,
+  derived: string | null
+): string | null {
+  if (explicit === null) return derived;
+  if (derived === null) return explicit;
+  // Comparacao de texto: as duas datas sao YYYY-MM-DD, formato em que a ordem
+  // lexicografica e a cronologica.
+  return explicit > derived ? explicit : derived;
+}
+
 /** O primeiro dia nao coberto pela folha. Sem folha, nao ha corte. */
 export function derivedCutoff(
   last: { year: number; month: number } | null
@@ -286,15 +313,18 @@ export type BridgeRepo = {
  * e um deles a correr uma versao propria desta sequencia era como a ponte
  * ficaria outra vez fora de passo com o orcamento.
  *
- * `explicitCutoff` e o corte do .env; null manda deriva-lo do Excel.
+ * `explicitCutoff` e o chao do .env: null deixa a fronteira so ao que a folha
+ * cobre. Os dois combinam-se pelo effectiveCutoff, nao um a substituir o outro.
  */
 export async function runBridge(
   userId: string,
   repo: BridgeRepo,
   explicitCutoff: string | null
 ): Promise<{ created: number; deleted: number; updated: number }> {
-  const cutoff =
-    explicitCutoff ?? derivedCutoff(await repo.lastExcelMonth(userId));
+  const cutoff = effectiveCutoff(
+    explicitCutoff,
+    derivedCutoff(await repo.lastExcelMonth(userId))
+  );
   const desired = bridgeRows(await repo.bridgeSource(userId), cutoff);
   const plan = reconcilePlan(await repo.existingBridgeRows(userId), desired);
   return repo.applyBridge(userId, plan);

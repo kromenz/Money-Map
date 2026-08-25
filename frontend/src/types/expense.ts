@@ -9,7 +9,15 @@ export type SheetTarget = {
   month: number;
 };
 
-export type NewExpense = SheetTarget & { amount: number };
+export type NewExpense = SheetTarget & {
+  amount: number;
+  /**
+   * Etiqueta a acompanhar este valor dentro da formula da celula, como
+   * `N("PS5")`. Opcional: sem ela a celula fica com o numero a seco, que e
+   * como sempre esteve.
+   */
+  note?: string;
+};
 
 export type AddExpenseResponse =
   | { status: "written"; year: number }

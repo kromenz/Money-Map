@@ -22,6 +22,7 @@ import { InvestmentsOverview } from "../../src/components/dashboard/InvestmentsO
 import { fetchGrid } from "../../src/services/budget.service";
 import { scanFolder } from "../../src/services/folder-scan.service";
 import { flushPending } from "../../src/services/expense.service";
+import { flushBridge } from "../../src/services/bridge.service";
 import { yearMetrics, monthDetail } from "../../src/lib/budget-metrics";
 import { categoryDeltas } from "../../src/lib/category-deltas";
 import { MONTH_LABELS } from "../../src/lib/format";
@@ -77,8 +78,39 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!data || scanned.current) return;
     scanned.current = true;
-    void runScan(false).then(() => applyPending());
+    void runScan(false)
+      .then(() => applyPending())
+      // A ponte por ultimo, e a seguir ao varrimento: e o varrimento que
+      // importa a folha e faz o corte avancar, e correr a ponte antes disso
+      // era escrever na folha meses que ela ja passou a cobrir.
+      .then(() => applyBridge());
   }, [data]);
+
+  /**
+   * Descarrega na folha o que a ponte do Trading 212 ainda lhe deve.
+   *
+   * Silencioso de proposito, ao contrario do applyPending: os gastos pendentes
+   * sao do utilizador e ele espera ve-los aparecer; isto e trabalho de fundo de
+   * uma integracao que pode nem estar configurada. O que ficar por escrever
+   * continua em divida no servidor e volta a ser tentado -- nada se perde por
+   * nao ser dito aqui.
+   */
+  async function applyBridge() {
+    try {
+      const result = await flushBridge();
+      if (result.written > 0) {
+        await queryClient.invalidateQueries({ queryKey: ["budget-grid"] });
+      }
+      // A folha ficou escrita mas o servidor nao soube: a proxima corrida
+      // escreveria os mesmos valores outra vez. E o unico desfecho aqui que o
+      // utilizador tem mesmo de ver.
+      for (const failure of result.failures) {
+        console.warn(`[bridge] ${failure.year}: ${failure.reason}`);
+      }
+    } catch (err) {
+      console.error("bridge flush failed", err);
+    }
+  }
 
   // Aplicar a fila reescreve o ficheiro e reimporta, por isso a grelha tem de
   // ser reposta a zero -- e o mesmo motivo por que registar um gasto a invalida.

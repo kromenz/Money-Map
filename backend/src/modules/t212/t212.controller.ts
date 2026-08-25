@@ -1,8 +1,21 @@
 import { RequestHandler } from "express";
 import { loadT212Config } from "./t212.config";
 import { runSyncNow, SyncInProgressError } from "./t212.scheduler";
-import { getCashFlows, getChart, getDividends, getOrders, getOverview } from "./t212.service";
-import { dividendsQuerySchema, listQuerySchema, ordersQuerySchema } from "./t212.http.schemas";
+import {
+  getCashFlows,
+  getChart,
+  getDividends,
+  getOrders,
+  getOverview,
+  getSheetPending,
+  markSheetWritten,
+} from "./t212.service";
+import {
+  dividendsQuerySchema,
+  listQuerySchema,
+  ordersQuerySchema,
+  sheetWrittenSchema,
+} from "./t212.http.schemas";
 
 /**
  * O overview responde sempre, com configured: false -- e o que permite a pagina
@@ -90,6 +103,34 @@ export const syncNow: RequestHandler = async (req, res, next) => {
       });
       return;
     }
+    next(err);
+  }
+};
+
+/**
+ * O que a ponte ainda deve a folha, e o registo do que ela aceitou.
+ *
+ * Sem guardConfigured de proposito: as linhas da ponte sobrevivem a chave ser
+ * retirada do .env, e nesse caso continuam a ter de poder chegar a folha. O
+ * que estas rotas leem esta todo na base -- nao tocam na API da corretora.
+ */
+export const sheetPending: RequestHandler = async (req, res, next) => {
+  try {
+    res.json(await getSheetPending((req as any).userId));
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const sheetWritten: RequestHandler = async (req, res, next) => {
+  try {
+    const parsed = sheetWrittenSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Lista de escritas invalida" });
+      return;
+    }
+    res.json(await markSheetWritten((req as any).userId, parsed.data.written));
+  } catch (err) {
     next(err);
   }
 };

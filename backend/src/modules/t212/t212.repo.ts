@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import type { SyncRepo } from "./t212.sync";
 import { BRIDGE_PREFIX, excelMonthCap } from "./t212.bridge";
+import type { StoredBridgeRow } from "./t212.sheet";
 
 /** Dinheiro chega aqui em string e vira Decimal. Nunca passa por um float. */
 const dec = (v: string) => new Prisma.Decimal(v);
@@ -314,5 +315,84 @@ export const prismaRepo: SyncRepo = {
       // ate tres upserts merece margem.
       { timeout: BRIDGE_TX_TIMEOUT_MS }
     );
+  },
+};
+
+/**
+ * A parte do repositorio que serve a escrita na folha.
+ *
+ * Fora do prismaRepo porque nao pertence ao SyncRepo: a sincronizacao nao
+ * escreve no .xlsx nem sabe que ele existe. Quem escreve e o frontend, que e o
+ * unico lado que conhece o BUDGET_FOLDER -- o backend corre num contentor e o
+ * caminho e do sistema de ficheiros do utilizador.
+ */
+export const sheetRepo = {
+  /**
+   * Todas as linhas da ponte, com a categoria e o que delas ja esta na folha.
+   *
+   * Traz tudo e deixa a filtragem ao sheetEdits em vez de a pedir a base. A
+   * comparacao "sheetAmount diferente de amount" precisava de referencias entre
+   * colunas e de um ramo a parte para o null, e sao no maximo umas centenas de
+   * linhas -- a clareza vale mais do que a query.
+   */
+  async bridgeRowsWithSheetState(userId: string): Promise<StoredBridgeRow[]> {
+    const rows = await prisma.transaction.findMany({
+      where: { userId, source: "api", externalId: { startsWith: BRIDGE_PREFIX } },
+      select: {
+        externalId: true,
+        date: true,
+        amount: true,
+        sheetAmount: true,
+        merchant: true,
+        category: { select: { section: true, group: true, name: true } },
+      },
+      orderBy: { date: "asc" },
+    });
+
+    return rows
+      // Uma linha sem categoria nao tem celula na folha para onde ir. O
+      // onDelete: SetNull do Transaction.category deixa isso acontecer.
+      .filter((r) => r.category !== null)
+      .map((r) => ({
+        externalId: r.externalId as string,
+        date: r.date.toISOString().slice(0, 10),
+        amount: r.amount.toFixed(2),
+        sheetAmount: r.sheetAmount === null ? null : r.sheetAmount.toFixed(2),
+        section: r.category!.section as StoredBridgeRow["section"],
+        group: r.category!.group,
+        name: r.category!.name,
+        merchant: r.merchant ?? "Trading 212",
+      }));
+  },
+
+  /**
+   * Regista o que a folha aceitou.
+   *
+   * Grava o total da linha e nao o incremento: uma marcacao que se perca a
+   * meio deixa a linha por marcar e a proxima corrida reescreve o mesmo delta,
+   * o que e visivel; somar incrementos deixava a conta a meio caminho e a
+   * folha calada.
+   *
+   * O prefixo repete-se no where pelo mesmo motivo de sempre: nada aqui pode
+   * mexer no que nao e da ponte, seja qual for a lista que chegue.
+   */
+  async markSheetWritten(
+    userId: string,
+    written: { externalId: string; amount: string }[]
+  ): Promise<number> {
+    let marked = 0;
+    for (const row of written) {
+      marked += (
+        await prisma.transaction.updateMany({
+          where: {
+            userId,
+            source: "api",
+            externalId: { equals: row.externalId, startsWith: BRIDGE_PREFIX },
+          },
+          data: { sheetAmount: dec(row.amount) },
+        })
+      ).count;
+    }
+    return marked;
   },
 };

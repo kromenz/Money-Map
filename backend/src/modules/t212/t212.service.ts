@@ -7,8 +7,9 @@ import {
   type InvestedEvent,
 } from "./t212.invested";
 import { mergeChart, type ChartPoint } from "./t212.chart";
-import { derivedCutoff, crossesToBudget } from "./t212.bridge";
-import { prismaRepo } from "./t212.repo";
+import { derivedCutoff, crossesToBudget, effectiveCutoff } from "./t212.bridge";
+import { sheetEdits } from "./t212.sheet";
+import { prismaRepo, sheetRepo } from "./t212.repo";
 import { toHoldingViews, toStatusViews, type HoldingView, type StatusView } from "./t212.view";
 
 export type OverviewResponse = {
@@ -55,7 +56,7 @@ export async function getOverview(userId: string): Promise<OverviewResponse> {
       : null,
     holdings: toHoldingViews(holdings),
     status: toStatusViews(states),
-    cutoff: cfg.bridgeFrom ?? derivedCutoff(lastExcel),
+    cutoff: effectiveCutoff(cfg.bridgeFrom, derivedCutoff(lastExcel)),
   };
 }
 
@@ -177,7 +178,7 @@ export async function getCashFlows(userId: string, opts: { limit: number; offset
     prisma.brokerCashFlow.count({ where: { userId } }),
     prismaRepo.lastExcelMonth(userId),
   ]);
-  const cutoff = cfg.bridgeFrom ?? derivedCutoff(lastExcel);
+  const cutoff = effectiveCutoff(cfg.bridgeFrom, derivedCutoff(lastExcel));
 
   return {
     total,
@@ -193,4 +194,23 @@ export async function getCashFlows(userId: string, opts: { limit: number; offset
       };
     }),
   };
+}
+
+/**
+ * O que a ponte ainda deve a folha.
+ *
+ * Quem escreve no .xlsx e o frontend -- e o unico lado que conhece o
+ * BUDGET_FOLDER, e o unico com o cadeado, o backup e o mecanismo de escrita
+ * cirurgica no XML. Estas duas rotas sao a conversa: uma diz o que falta, a
+ * outra regista o que a folha aceitou.
+ */
+export async function getSheetPending(userId: string) {
+  return { edits: sheetEdits(await sheetRepo.bridgeRowsWithSheetState(userId)) };
+}
+
+export async function markSheetWritten(
+  userId: string,
+  written: { externalId: string; amount: string }[]
+) {
+  return { marked: await sheetRepo.markSheetWritten(userId, written) };
 }

@@ -7,6 +7,8 @@ import {
   guardConfigured,
   orders,
   overview,
+  sheetPending,
+  sheetWritten,
   syncNow,
 } from "./t212.controller";
 
@@ -18,5 +20,7 @@ t212Router.get("/dividends", authMiddleware, guardConfigured, dividends);
 t212Router.get("/orders", authMiddleware, guardConfigured, orders);
 t212Router.get("/cashflows", authMiddleware, guardConfigured, cashflows);
 t212Router.post("/sync", authMiddleware, guardConfigured, syncNow);
+t212Router.get("/sheet/pending", authMiddleware, sheetPending);
+t212Router.post("/sheet/written", authMiddleware, sheetWritten);
 
 export default t212Router;
