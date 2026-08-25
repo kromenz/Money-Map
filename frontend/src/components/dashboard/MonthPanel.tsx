@@ -3,6 +3,7 @@
 import { KpiCard } from "./KpiCard";
 import { GroupComposition } from "./GroupComposition";
 import { CategoryDeltas } from "./CategoryDeltas";
+import { MonthPurchases } from "./MonthPurchases";
 import { formatEur, formatPercent } from "@/lib/format";
 import { deltaVsAverage } from "@/lib/budget-metrics";
 import type { MonthDetail, MonthAverages } from "@/lib/budget-metrics";
@@ -13,11 +14,13 @@ export function MonthPanel({
   monthLabel,
   averages,
   deltas,
+  year,
 }: {
   detail: MonthDetail;
   monthLabel: string;
   averages: MonthAverages;
   deltas: CategoryDelta[];
+  year: number;
 }) {
   return (
     <section className="space-y-4">
@@ -68,6 +71,14 @@ export function MonthPanel({
           <CategoryDeltas deltas={deltas} />
         </div>
       </div>
+
+      {/* Largura toda e nao ao lado dos outros dois: as etiquetas sao texto
+          livre do utilizador e nao cabem numa meia coluna. */}
+      <MonthPurchases
+        year={year}
+        month={detail.month + 1}
+        monthLabel={monthLabel}
+      />
     </section>
   );
 }

@@ -39,4 +39,6 @@ export type PendingExpense = {
   name: string;
   /** Decimal em string, como tudo o que o backend devolve em dinheiro. */
   amount: string;
+  /** A etiqueta escrita quando o gasto foi registado, se levou alguma. */
+  note: string | null;
 };

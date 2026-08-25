@@ -5,6 +5,7 @@ import {
   signedAmount,
   type ParsedWorkbook,
 } from "./budget.parser";
+import { cellParcels } from "./budget.parcels";
 import { compareScope } from "./budget.verify";
 import type { MonthComparison, StructureReport } from "./budget.verify";
 import { diffCells, type DiffCell, type WorkbookDiff } from "./budget.diff";
@@ -217,6 +218,45 @@ async function writeAndVerify(
   });
 
   if (rows.length > 0) await tx.transaction.createMany({ data: rows });
+
+  // 2b. Parcelas: o detalhe de dentro de cada celula.
+  //
+  // Espelho do ambito, como as transacoes -- apagar primeiro, reescrever
+  // depois. Uma celula que o utilizador simplifique no Excel tem de perder as
+  // parcelas antigas, senao a lista de compras passa a descrever um mes que ja
+  // nao existe.
+  //
+  // Corre DEPOIS das transacoes e nao no lugar delas: a verificacao ao
+  // centimo do passo 3 e sobre as transacoes, e nada aqui lhe pode mexer.
+  await tx.sheetParcel.deleteMany({ where: { userId, year } });
+
+  const parcelRows = parsed.cells.flatMap((cell) => {
+    const categoryId = categoryIds.get(categoryKey(cell));
+    if (!categoryId) return [];
+
+    // cellParcels e nao parseParcels: uma celula que nao se consegue desmontar
+    // conta como uma parcela do seu proprio valor. A soma bate sempre com o
+    // que a grelha mostra, e nenhuma categoria com valor desaparece da lista.
+    const parcels = cellParcels(cell.formula, cell.sheetValue);
+
+    return parcels.map((parcel, i) => ({
+      userId,
+      categoryId,
+      year,
+      month: cell.month,
+      seq: i,
+      // Mesma convencao da Transaction: a soma das parcelas de uma celula da
+      // o amount da transaccao desse mes.
+      amount: new Prisma.Decimal(
+        signedAmount(cell.section, parcel.value).toFixed(2)
+      ),
+      note: parcel.note,
+    }));
+  });
+
+  if (parcelRows.length > 0) {
+    await tx.sheetParcel.createMany({ data: parcelRows });
+  }
 
   // 3. Ler de volta o que ficou gravado e comparar com o que a folha declara.
   //    Dentro da transacao isto ve as escritas por confirmar, portanto continua

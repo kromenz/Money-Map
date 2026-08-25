@@ -312,6 +312,7 @@ export default function DashboardPage() {
           monthLabel={MONTH_LABELS[detail.month]}
           averages={metrics.averages}
           deltas={deltas}
+          year={year}
         />
       </div>
     );

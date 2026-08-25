@@ -26,6 +26,7 @@ model User {
   brokerDividends BrokerDividend[]
   brokerCashFlows BrokerCashFlow[]
   syncStates      SyncState[]
+  sheetParcels    SheetParcel[]
 }
 
 enum AuthProvider {
@@ -95,6 +96,7 @@ model Category {
   archived     Boolean       @default(false)
   transactions Transaction[]
   rules        Rule[]
+  sheetParcels SheetParcel[]
 
   @@unique([userId, section, group, name])
   @@index([userId, section, sortOrder])
@@ -134,6 +136,36 @@ model Transaction {
   @@index([userId, categoryId])
 }
 
+/// Uma parcela de uma celula da folha: `=42.88+11.39` sao duas destas.
+///
+/// Existe a parte da Transaction de proposito. A Transaction e o agregado
+/// mensal por categoria, e e ela que a importacao verifica ao centimo contra a
+/// folha -- mexer no seu grao era mexer no codigo que protege o ficheiro do
+/// utilizador. Isto e detalhe para mostrar e para procurar, e vive ao lado.
+model SheetParcel {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  year       Int
+  /// 1 = Janeiro.
+  month      Int
+  /// A ordem dentro da celula, que e a ordem por que foram escritas.
+  seq        Int
+  /// Na convencao de armazenamento, a mesma da Transaction: a soma das
+  /// parcelas de uma celula tem de dar o amount da Transaction desse mes.
+  amount     Decimal  @db.Decimal(12, 2)
+  /// A etiqueta N("..."), quando a parcela tem uma. Null em tudo o que ja
+  /// estava escrito na folha antes de isto existir.
+  note       String?
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, categoryId, year, month, seq])
+  @@index([userId, year, month])
+  @@index([userId, note])
+}
+
 model Rule {
   id         String   @id @default(uuid())
   userId     String
@@ -160,6 +192,10 @@ model PendingExpense {
   group     String   @map("category_group")
   name      String
   amount    Decimal  @db.Decimal(12, 2)
+  /// A etiqueta que vai acompanhar o valor na formula da celula. Sem ela, um
+  /// gasto registado com o Excel aberto chegava a folha sem nome -- a fila
+  /// perdia em silencio o que o utilizador escreveu.
+  note      String?
   createdAt DateTime @default(now())
 
   @@index([userId, year])

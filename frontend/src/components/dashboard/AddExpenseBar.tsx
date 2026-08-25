@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarIcon, PlusIcon, TagIcon } from "lucide-react";
+import { CalendarIcon, PencilIcon, PlusIcon, TagIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -43,6 +43,9 @@ export function AddExpenseBar({
   // mostra o placeholder em vez de uma linha vazia.
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
+  // O que foi comprado. Vai para dentro da formula da celula como N("..."), e
+  // e o que a lista do mes mostra depois -- sem ele a parcela fica anonima.
+  const [note, setNote] = useState("");
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,13 +83,16 @@ export function AddExpenseBar({
         group: category.group,
         name: category.name,
         amount: value,
+        note: note.trim() === "" ? undefined : note.trim(),
       });
 
       if (result.status === "written") {
         setAmount("");
+        setNote("");
         onWritten();
       } else if (result.status === "pending") {
         setAmount("");
+        setNote("");
         onPending(result.count);
       } else {
         setError(result.reason);
@@ -144,6 +150,21 @@ export function AddExpenseBar({
         {tooManyDecimals && (
           <p className="text-xs text-destructive">Use at most two decimal places</p>
         )}
+      </div>
+
+      <div className="relative">
+        <PencilIcon className="pointer-events-none absolute inset-y-0 left-3 my-auto size-3.5 text-muted-foreground" />
+        <Input
+          aria-label="What was it"
+          placeholder="What was it? (optional)"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          // 60 e o mesmo limite que a rota impoe. Cortar aqui tambem evita
+          // que o utilizador escreva 200 caracteres e so depois descubra que
+          // a folha guardou 60.
+          maxLength={60}
+          className="h-10 w-56 pl-9"
+        />
       </div>
 
       <Select
