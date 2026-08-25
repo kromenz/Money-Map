@@ -9,6 +9,9 @@ import { PortfolioSummary } from "../../src/components/t212/PortfolioSummary";
 import { SyncStatus } from "../../src/components/t212/SyncStatus";
 import { PortfolioChart } from "../../src/components/t212/PortfolioChart";
 import { HoldingsTable } from "../../src/components/t212/HoldingsTable";
+import { DividendsPanel } from "../../src/components/t212/DividendsPanel";
+import { OrdersTable } from "../../src/components/t212/OrdersTable";
+import { CashFlowTable } from "../../src/components/t212/CashFlowTable";
 import { NotConfigured } from "../../src/components/t212/NotConfigured";
 import { ThemeToggle } from "../../src/components/ThemeToggle";
 import { t212StageLabel } from "../../src/lib/t212-labels";
@@ -104,6 +107,10 @@ export default function InvestimentosPage() {
             <h2 className="text-sm font-medium">Carteira</h2>
             <HoldingsTable holdings={data.holdings} />
           </section>
+
+          <DividendsPanel />
+          <OrdersTable />
+          <CashFlowTable cutoff={data.cutoff} />
 
           {syncError ? (
             <p className="text-xs text-destructive" title={syncError.detail}>
