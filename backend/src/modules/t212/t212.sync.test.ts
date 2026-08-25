@@ -344,14 +344,42 @@ describe("syncAll", () => {
     expect(report.stages.find((s) => s.kind === "bridge")!.ok).toBe(true);
   });
 
-  it("a etapa bridge nao chama setState -- 'bridge' nao existe no enum SyncKind da base", async () => {
+  // Este teste ja afirmou o contrario: que a etapa bridge NAO gravava estado,
+  // porque "bridge" nao existia no enum SyncKind. A consequencia era que a
+  // unica etapa que mexe no orcamento podia falhar em todas as corridas
+  // agendadas com as outras cinco verdes no painel e nada a dize-lo. O valor
+  // passou a existir no enum e a excepcao saiu do stage().
+  it("a etapa bridge grava estado como as outras", async () => {
     const setState = vi.fn(async () => {});
     const repo = fakeRepo({ setState });
     const client = fakeClient({});
 
     await syncAll("u1", deps(client, repo));
 
-    expect(setState).not.toHaveBeenCalledWith("u1", "bridge", expect.anything());
+    expect(setState).toHaveBeenCalledWith(
+      "u1",
+      "bridge",
+      expect.objectContaining({ lastRunAt: expect.any(Date), lastError: null })
+    );
+  });
+
+  it("a etapa bridge que falha deixa o erro gravado, para o painel o mostrar", async () => {
+    const setState = vi.fn(async () => {});
+    const repo = fakeRepo({
+      setState,
+      applyBridge: vi.fn(async () => {
+        throw new Error("categoria em falta");
+      }),
+    });
+
+    const report = await syncAll("u1", deps(fakeClient({}), repo));
+
+    expect(report.stages.find((s) => s.kind === "bridge")!.ok).toBe(false);
+    expect(setState).toHaveBeenCalledWith(
+      "u1",
+      "bridge",
+      expect.objectContaining({ lastError: expect.stringContaining("categoria em falta") })
+    );
   });
 
   it("reporta os apagados da ponte, nao so os criados", async () => {

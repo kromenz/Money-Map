@@ -7,6 +7,7 @@ export const T212_STAGE_LABELS: Record<string, string> = {
   orders: "Ordens",
   dividends: "Dividendos",
   transactions: "Caixa",
+  bridge: "Orcamento",
 };
 
 // O identificador cru e melhor do que nada quando uma etapa nova ainda nao

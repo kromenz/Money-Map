@@ -26,7 +26,16 @@ import {
 } from "./t212.bridge";
 
 export type HistoryKind = "orders" | "dividends" | "transactions";
-export type StateKind = HistoryKind | "summary" | "positions";
+/**
+ * `bridge` esta aqui de proposito: ela nao le a API, mas e a etapa que mexe no
+ * orcamento, e era a unica sem estado gravado -- podia falhar em todas as
+ * corridas agendadas com as outras cinco verdes no painel e nada a dize-lo.
+ */
+export type StateKind =
+  | HistoryKind
+  | "summary"
+  | "positions"
+  | "bridge";
 
 export type SyncRepo = {
   getState(
@@ -112,7 +121,7 @@ const empty = (kind: string): StageReport => ({
  * dividendos em falta e um resultado legitimo, nao uma sincronizacao partida.
  */
 async function stage(
-  kind: StateKind | "bridge",
+  kind: StateKind,
   deps: SyncDeps,
   userId: string,
   run: (report: StageReport) => Promise<void>
@@ -126,14 +135,12 @@ async function stage(
     report.error = err instanceof Error ? err.message : String(err);
   }
 
-  if (kind !== "bridge") {
-    await deps.repo
-      .setState(userId, kind, {
-        lastRunAt: deps.now(),
-        lastError: report.error ?? null,
-      })
-      .catch(() => undefined);
-  }
+  await deps.repo
+    .setState(userId, kind, {
+      lastRunAt: deps.now(),
+      lastError: report.error ?? null,
+    })
+    .catch(() => undefined);
 
   return report;
 }

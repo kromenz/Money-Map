@@ -173,6 +173,11 @@ enum SyncKind {
   orders
   dividends
   transactions
+  /// A ponte nao le a API, mas e a etapa que mexe no orcamento -- e era a unica
+  /// sem estado gravado, so porque este valor nao existia aqui. Podia falhar em
+  /// todas as corridas agendadas com as outras cinco etapas verdes no painel e
+  /// nada a dize-lo.
+  bridge
 }
 
 /// A carteira de agora, nao um historico: reescrita inteira a cada sync.
