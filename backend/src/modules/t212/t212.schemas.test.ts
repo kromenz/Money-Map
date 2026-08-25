@@ -7,6 +7,7 @@ import {
   cashTransactionSchema,
   parseItems,
 } from "./t212.schemas";
+import { toHoldingRows, toOrderRows, toDividendRows } from "./t212.map";
 
 const summary = {
   cash: { availableToTrade: 120.5, inPies: 0, reservedForOrders: 0 },
@@ -130,6 +131,153 @@ describe("dividendSchema", () => {
       type: "TIPO_NOVO",
     });
     expect(r.success).toBe(true);
+  });
+});
+
+describe("campos numericos que a API manda a null em vez de omitir", () => {
+  // Payload real de uma posicao num ETF em euros: a T212 manda fxImpact:null
+  // sempre que a moeda do instrumento e da conta coincidem. `.default()` do
+  // Zod so dispara em undefined, nao em null -- o walletImpact inteiro falhava
+  // e a posicao desaparecia. Numa conta real isto tirou 7 ETFs (~107 EUR) de
+  // 72 posicoes, com a etapa a reportar ok:true.
+  const etfEmEuros = {
+    instrument: {
+      ticker: "SMHm_EQ",
+      name: "VanEck Semiconductor (Acc)",
+      isin: "IE00BMC38736",
+      currency: "EUR",
+    },
+    quantity: 0.15168716,
+    currentPrice: 89.09,
+    averagePricePaid: 95.13000309,
+    walletImpact: {
+      currency: "EUR",
+      totalCost: 14.43,
+      currentValue: 13.51,
+      unrealizedProfitLoss: -0.92,
+      fxImpact: null,
+    },
+  };
+
+  it("positionSchema aceita fxImpact:null e mapeia para impacto cambial zero", () => {
+    const parsed = positionSchema.safeParse(etfEmEuros);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+
+    const [row] = toHoldingRows([parsed.data]);
+    expect(row.fxImpact).toBe("0.00");
+    expect(row.currentValue).toBe("13.51");
+  });
+
+  it("positionSchema continua a recusar uma posicao a que falte o ticker", () => {
+    const semTicker = {
+      ...etfEmEuros,
+      instrument: { ...etfEmEuros.instrument, ticker: undefined },
+    };
+    expect(positionSchema.safeParse(semTicker).success).toBe(false);
+  });
+
+  it("positionSchema aceita null nos outros numeros por omissao do walletImpact e do currentPrice", () => {
+    const tudoNulo = {
+      ...etfEmEuros,
+      currentPrice: null,
+      walletImpact: {
+        currency: "EUR",
+        totalCost: null,
+        currentValue: null,
+        unrealizedProfitLoss: null,
+        fxImpact: null,
+      },
+    };
+    const parsed = positionSchema.safeParse(tudoNulo);
+    expect(parsed.success).toBe(true);
+  });
+
+  it("accountSummarySchema aceita null nos campos com omissao de cash e investments", () => {
+    const parsed = accountSummarySchema.safeParse({
+      currency: "EUR",
+      cash: { availableToTrade: 120.5, inPies: null, reservedForOrders: null },
+      investments: {
+        currentValue: 5000,
+        totalCost: 4200,
+        realizedProfitLoss: null,
+        unrealizedProfitLoss: null,
+      },
+      totalValue: 5120.5,
+    });
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.cash.inPies).toBe(0);
+    expect(parsed.data.investments.realizedProfitLoss).toBe(0);
+  });
+
+  it("historicalOrderSchema aceita fxRate:null e realisedProfitLoss:null sem saltar a execucao", () => {
+    const item = {
+      order: { id: 991, ticker: "AAPL_US_EQ", side: "BUY", type: "MARKET", status: "FILLED", initiatedFrom: "WEB" },
+      fill: {
+        id: 5501,
+        filledAt: "2026-03-02T14:31:00Z",
+        price: 88.1,
+        quantity: 2,
+        walletImpact: { currency: "EUR", fxRate: null, netValue: -176.2, realisedProfitLoss: null, taxes: [] },
+      },
+    };
+    const parsed = historicalOrderSchema.safeParse(item);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.fill?.walletImpact?.fxRate).toBeUndefined();
+    expect(parsed.data.fill?.walletImpact?.realisedProfitLoss).toBe(0);
+  });
+
+  it("netValue:null continua a cair no valor derivado do preco, nao em zero -- confirma que .default(0) nao voltou", () => {
+    // Esta e a garantia central da correccao anterior ao netValue (comentario
+    // em t212.schemas.ts): tornar "nulo vira zero" desarmaria o `??` do
+    // toOrderRows. O teste passa null explicito, nao ausencia, porque e isso
+    // que a API manda -- ausencia ja estava coberta noutro teste.
+    const item = {
+      order: { id: 991, ticker: "AAPL_US_EQ", side: "BUY", type: "MARKET", status: "FILLED", initiatedFrom: "WEB" },
+      fill: {
+        id: 1,
+        filledAt: "2026-03-02T14:31:00Z",
+        price: 10,
+        quantity: 3,
+        walletImpact: { netValue: null, fxRate: 1.08, realisedProfitLoss: 0, taxes: [] },
+      },
+    };
+    const parsed = parseItems(historicalOrderSchema, [item]);
+    expect(parsed.skipped).toEqual([]);
+
+    const [row] = toOrderRows(parsed.items);
+    expect(row.netValue).toBe("-30.00");
+    expect(row.netValue).not.toBe("0.00");
+  });
+
+  it("dividendSchema aceita null em quantity, grossAmountPerShare e amountInEuro; amountInEuro:null continua a cair no amount", () => {
+    const item = {
+      reference: "div-77",
+      paidOn: "2026-05-15T00:00:00Z",
+      ticker: "AAPL_US_EQ",
+      quantity: null,
+      grossAmountPerShare: null,
+      amount: 1.42,
+      currency: "USD",
+      amountInEuro: null,
+      type: "ORDINARY",
+    };
+    const parsed = parseItems(dividendSchema, [item]);
+    expect(parsed.skipped).toEqual([]);
+    expect(parsed.items[0].quantity).toBe(0);
+    expect(parsed.items[0].grossAmountPerShare).toBe(0);
+
+    const [row] = toDividendRows(parsed.items);
+    expect(row.amountInEuro).toBe("1.42");
+  });
+
+  it("cashTransactionSchema mantem o type como enum estrito -- null continua a ser recusado", () => {
+    // O type decide se dinheiro atravessa para o orcamento; nao entra no
+    // ajudante de numeros nulos, nem sequer e numerico.
+    const item = { amount: 500, currency: "EUR", dateTime: "2026-04-01T09:00:00Z", reference: "d-1", type: null };
+    expect(cashTransactionSchema.safeParse(item).success).toBe(false);
   });
 });
 

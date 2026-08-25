@@ -6,6 +6,40 @@ import { z } from "zod";
  * enfeita, e estritos onde o campo decide para onde vai dinheiro.
  */
 
+/**
+ * A API manda `null` em vez de omitir o campo sempre que nao ha nada a
+ * reportar -- fxImpact vem null sempre que a moeda do instrumento e igual a
+ * da conta, por exemplo. `.default()` do Zod so dispara em `undefined`;
+ * contra `null` o campo falha sozinho e arrasta o objecto inteiro consigo.
+ * Foi assim que sete ETFs em euros (~107 EUR) desapareceram de uma
+ * sincronizacao real: a API devolveu 72 posicoes, a base ficou com 65, e a
+ * etapa reportou ok:true. Este ajudante aceita as duas formas de "nada aqui"
+ * (null e undefined) e resolve para o valor por omissao indicado.
+ */
+function nullableNumber(fallback: number) {
+  return z
+    .number()
+    .nullish()
+    .transform((v) => v ?? fallback);
+}
+
+/**
+ * Variante sem valor por omissao: para campos onde null/ausente tem de
+ * continuar a significar "sem dado", nao "zero" -- netValue, que o
+ * toOrderRows deriva do preco vezes quantidade quando falta, e amountInEuro,
+ * que o toDividendRows faz cair no amount. Colapsa null e undefined no mesmo
+ * `undefined`, para o `??` de quem le continuar a disparar. Um
+ * nullableNumber(0) aqui desarmaria esse fallback tal como o .default(0)
+ * desarmava o de fxImpact.
+ */
+function nullableOptionalNumber() {
+  return z
+    .number()
+    .nullish()
+    .transform((v) => v ?? undefined)
+    .optional();
+}
+
 export const instrumentSchema = z.object({
   ticker: z.string(),
   isin: z.string().default(""),
@@ -17,14 +51,14 @@ export const accountSummarySchema = z.object({
   currency: z.string().default(""),
   cash: z.object({
     availableToTrade: z.number(),
-    inPies: z.number().default(0),
-    reservedForOrders: z.number().default(0),
+    inPies: nullableNumber(0),
+    reservedForOrders: nullableNumber(0),
   }),
   investments: z.object({
     currentValue: z.number(),
     totalCost: z.number(),
-    realizedProfitLoss: z.number().default(0),
-    unrealizedProfitLoss: z.number().default(0),
+    realizedProfitLoss: nullableNumber(0),
+    unrealizedProfitLoss: nullableNumber(0),
   }),
   totalValue: z.number(),
 });
@@ -33,13 +67,15 @@ export const positionSchema = z.object({
   instrument: instrumentSchema,
   quantity: z.number(),
   averagePricePaid: z.number(),
-  currentPrice: z.number().default(0),
+  currentPrice: nullableNumber(0),
   walletImpact: z
     .object({
-      currentValue: z.number().default(0),
-      totalCost: z.number().default(0),
-      unrealizedProfitLoss: z.number().default(0),
-      fxImpact: z.number().default(0),
+      currentValue: nullableNumber(0),
+      totalCost: nullableNumber(0),
+      unrealizedProfitLoss: nullableNumber(0),
+      // O campo que causou o defeito: null sempre que a moeda do instrumento
+      // e da conta coincidem.
+      fxImpact: nullableNumber(0),
     })
     .optional(),
 });
@@ -64,17 +100,20 @@ export const historicalOrderSchema = z.object({
       quantity: z.number(),
       walletImpact: z
         .object({
-          // .optional() e nao .default(0): o toOrderRows tem um recurso
-          // escrito de proposito -- `walletImpact?.netValue ?? signed` --
-          // que cai no preco vezes quantidade quando o valor nao vem. Com
-          // .default(0), o Zod preenchia zero, o ?? nao disparava (zero nao e
-          // nulo) e gravava-se "0.00". Desde que a serie do grafico passou a
-          // derivar o preco em moeda da conta a partir do netValue, uma
-          // execucao assim entrava com custo zero e subavaliava a linha do
-          // investido sem sinal nenhum.
-          netValue: z.number().optional(),
-          fxRate: z.number().optional(),
-          realisedProfitLoss: z.number().default(0),
+          // nullableOptionalNumber() e nao nullableNumber(0): o toOrderRows
+          // tem um recurso escrito de proposito -- `walletImpact?.netValue ??
+          // signed` -- que cai no preco vezes quantidade quando o valor nao
+          // vem. Com um valor por omissao (0, seja de .default() ou de
+          // nullableNumber(0)), o Zod preenchia zero, o ?? nao disparava
+          // (zero nao e nulo/undefined) e gravava-se "0.00". Desde que a
+          // serie do grafico passou a derivar o preco em moeda da conta a
+          // partir do netValue, uma execucao assim entrava com custo zero e
+          // subavaliava a linha do investido sem sinal nenhum. A API tanto
+          // omite este campo como manda null explicito -- as duas formas tem
+          // de continuar a cair no derivado, nunca em zero.
+          netValue: nullableOptionalNumber(),
+          fxRate: nullableOptionalNumber(),
+          realisedProfitLoss: nullableNumber(0),
           taxes: z.array(z.unknown()).optional(),
         })
         .optional(),
@@ -86,11 +125,13 @@ export const dividendSchema = z.object({
   reference: z.string(),
   paidOn: z.string(),
   ticker: z.string().default(""),
-  quantity: z.number().default(0),
-  grossAmountPerShare: z.number().default(0),
+  quantity: nullableNumber(0),
+  grossAmountPerShare: nullableNumber(0),
   amount: z.number(),
   currency: z.string().default(""),
-  amountInEuro: z.number().optional(),
+  // Sem valor por omissao: o toDividendRows cai no amount quando falta, e um
+  // amountInEuro:0 apagaria isso silenciosamente.
+  amountInEuro: nullableOptionalNumber(),
   // String e nao enum: o tipo de dividendo nao decide nada -- todos sao receita.
   type: z.string().default(""),
 });
