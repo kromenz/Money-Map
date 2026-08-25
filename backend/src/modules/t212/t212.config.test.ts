@@ -61,3 +61,16 @@ describe("loadT212Config", () => {
     ).toBeNull();
   });
 });
+
+describe("loadT212Config -- utilizador alvo", () => {
+  it("sem T212_USER_EMAIL fica null", () => {
+    expect(loadT212Config({ T212_API_KEY: "k" }).userEmail).toBeNull();
+  });
+
+  it("le o T212_USER_EMAIL quando existe", () => {
+    expect(
+      loadT212Config({ T212_API_KEY: "k", T212_USER_EMAIL: "ana@exemplo.pt" })
+        .userEmail
+    ).toBe("ana@exemplo.pt");
+  });
+});

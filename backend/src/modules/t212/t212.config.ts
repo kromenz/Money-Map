@@ -5,6 +5,7 @@ export type T212Config = {
   apiSecret: string;
   syncIntervalHours: number;
   bridgeFrom: string | null;
+  userEmail: string | null;
 };
 
 const LIVE = "https://live.trading212.com";
@@ -30,5 +31,6 @@ export function loadT212Config(
     apiSecret: env.T212_API_SECRET ?? "",
     syncIntervalHours: Number.isFinite(hours) && hours > 0 ? hours : 6,
     bridgeFrom: ISO_DATE.test(bridgeFrom) ? bridgeFrom : null,
+    userEmail: env.T212_USER_EMAIL ? env.T212_USER_EMAIL : null,
   };
 }
