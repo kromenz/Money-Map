@@ -25,6 +25,8 @@ export type SyncStatus = {
   kind: string;
   lastRunAt: string | null;
   lastError: string | null;
+  /** Quantos itens a ultima corrida desta etapa saltou no Zod -- uma etapa que salta itens nao pode parecer igual a uma que correu limpa. */
+  lastSkipped: number;
 };
 
 export type Overview = {

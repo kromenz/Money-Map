@@ -35,6 +35,17 @@ export function SyncStatus({
               — falhou
             </span>
           ) : null}
+          {/* Nao alarmante, mas visivel: uma etapa que saltou itens no Zod nao
+              pode parecer identica a uma que correu limpa -- foi assim que
+              sete posicoes desapareceram em silencio com ok:true no painel. */}
+          {s.lastSkipped > 0 ? (
+            <span
+              className="text-amber-600 dark:text-amber-500"
+              title={`${s.lastSkipped} ${s.lastSkipped === 1 ? "item saltado" : "itens saltados"} na ultima corrida`}
+            >
+              — {s.lastSkipped} {s.lastSkipped === 1 ? "saltado" : "saltados"}
+            </span>
+          ) : null}
         </span>
       ))}
 
