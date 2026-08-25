@@ -25,7 +25,9 @@ describe("basicAuth", () => {
 
 describe("T212Client.request", () => {
   it("chama o baseUrl mais o caminho e envia o Basic", async () => {
-    const fetchMock = vi.fn(async () => jsonResponse({ totalValue: 1 }));
+    // Parametros tipados aqui (nao so no site do TS2493) porque esta chamada
+    // tambem indexa mock.calls -- sem eles o vi.fn() infere zero argumentos.
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => jsonResponse({ totalValue: 1 }));
     const { client } = make(fetchMock as unknown as typeof fetch);
 
     await client.request(PATHS.summary);
@@ -120,7 +122,11 @@ describe("T212Client.paginate", () => {
   });
 
   it("comeca no caminho guardado, para retomar um backfill interrompido", async () => {
-    const fetchMock = vi.fn(async () => jsonResponse({ items: [], nextPagePath: null }));
+    // vi.fn(async () => ...) sem parametros infere assinatura de zero
+    // argumentos, o que torna mock.calls[0][0] um acesso a um tuplo vazio
+    // (TS2493). Declarar os parametros que o fetch recebe corrige o tipo
+    // sem mudar o que o mock faz.
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => jsonResponse({ items: [], nextPagePath: null }));
     const { client } = make(fetchMock as unknown as typeof fetch);
 
     const guardado = "/api/v0/equity/history/orders?cursor=77&limit=50";
