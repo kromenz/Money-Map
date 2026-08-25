@@ -8,21 +8,6 @@ CREATE TYPE "public"."CashFlowType" AS ENUM ('DEPOSIT', 'WITHDRAW', 'FEE', 'TRAN
 CREATE TYPE "public"."SyncKind" AS ENUM ('summary', 'positions', 'orders', 'dividends', 'transactions');
 
 -- CreateTable
-CREATE TABLE "public"."PendingExpense" (
-    "id" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "year" INTEGER NOT NULL,
-    "month" INTEGER NOT NULL,
-    "section" TEXT NOT NULL,
-    "category_group" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "amount" DECIMAL(12,2) NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "PendingExpense_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
 CREATE TABLE "public"."Holding" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
@@ -125,9 +110,6 @@ CREATE TABLE "public"."SyncState" (
 );
 
 -- CreateIndex
-CREATE INDEX "PendingExpense_userId_year_idx" ON "public"."PendingExpense"("userId", "year");
-
--- CreateIndex
 CREATE UNIQUE INDEX "Holding_userId_ticker_key" ON "public"."Holding"("userId", "ticker");
 
 -- CreateIndex
@@ -155,9 +137,6 @@ CREATE UNIQUE INDEX "BrokerCashFlow_userId_externalId_key" ON "public"."BrokerCa
 CREATE UNIQUE INDEX "SyncState_userId_kind_key" ON "public"."SyncState"("userId", "kind");
 
 -- AddForeignKey
-ALTER TABLE "public"."PendingExpense" ADD CONSTRAINT "PendingExpense_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "public"."Holding" ADD CONSTRAINT "Holding_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -174,4 +153,3 @@ ALTER TABLE "public"."BrokerCashFlow" ADD CONSTRAINT "BrokerCashFlow_userId_fkey
 
 -- AddForeignKey
 ALTER TABLE "public"."SyncState" ADD CONSTRAINT "SyncState_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
