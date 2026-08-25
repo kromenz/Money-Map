@@ -9,7 +9,7 @@ const row = (over: Partial<StoredBridgeRow> = {}): StoredBridgeRow => ({
   sheetAmount: null,
   section: "savings",
   group: "",
-  name: "Trading 212",
+  name: "Savings and Investments",
   merchant: "Trading 212",
   ...over,
 });

@@ -60,7 +60,15 @@ function isInterest(type: CashFlowKind): boolean {
  * e aqui que se muda -- num sitio, nao espalhado pelo codigo.
  */
 export const CATEGORIES = {
-  transfers: { section: "savings" as const, group: "", name: "Trading 212" },
+  // "Savings and Investments" e uma linha que a folha ja tem, escolhida pelo
+  // utilizador. A escrita no .xlsx e cirurgica e nunca insere linhas novas,
+  // portanto um nome que a folha nao tenha faz a ponte falhar ate alguem a
+  // criar a mao -- e era o que acontecia com o "Trading 212" que aqui estava.
+  transfers: {
+    section: "savings" as const,
+    group: "",
+    name: "Savings and Investments",
+  },
   dividends: { section: "income" as const, group: "", name: "Dividends" },
   interest: { section: "income" as const, group: "", name: "Interest" },
 };
