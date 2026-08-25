@@ -16,6 +16,30 @@ type Lot = { quantity: Prisma.Decimal; avgCost: Prisma.Decimal };
 const ZERO = new Prisma.Decimal(0);
 
 /**
+ * Preco por accao na moeda da conta.
+ *
+ * O `price` da execucao esta na moeda do instrumento: uma carteira com um
+ * titulo em dolares produzia uma serie que somava euros com dolares, desenhada
+ * contra uma linha de valor de mercado que esta em euros. O `netValue` da mesma
+ * execucao ja vem na moeda da conta -- dividi-lo pela quantidade da o mesmo
+ * preco por accao, convertido, sem precisar da taxa de cambio do dia.
+ *
+ * Valor absoluto porque o netValue traz o sinal do movimento de caixa (negativo
+ * numa compra). Quem decide somar ou subtrair e o `side`, e o investedSeries
+ * espera sempre uma grandeza positiva.
+ *
+ * Quantidade zero nao devia existir numa execucao, mas uma divisao por zero
+ * aqui envenenava a serie inteira: cai em zero, que a deixa como estava.
+ */
+export function accountCurrencyPrice(
+  quantity: Prisma.Decimal,
+  netValue: Prisma.Decimal
+): Prisma.Decimal {
+  if (quantity.isZero()) return ZERO;
+  return netValue.abs().div(quantity.abs());
+}
+
+/**
  * Capital investido = soma de (quantidade x custo medio) por titulo.
  *
  * O ponto delicado e a venda: reduz o investido pelo custo medio das accoes

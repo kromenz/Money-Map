@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { investedSeries } from "./t212.invested";
+import { Prisma } from "@prisma/client";
+import { accountCurrencyPrice, investedSeries } from "./t212.invested";
 
 const ev = (date: string, ticker: string, side: "BUY" | "SELL", quantity: string, price: string) => ({
   date,
@@ -88,5 +89,33 @@ describe("investedSeries", () => {
 
     expect(serie.map((p) => p.date)).toEqual(["2026-01-05", "2026-02-05"]);
     expect(serie[0].invested).toBe("10.00");
+  });
+});
+
+describe("accountCurrencyPrice", () => {
+  const dec = (v: string) => new Prisma.Decimal(v);
+
+  it("uma execucao cuja netValue nao bate com price x quantity segue a netValue", () => {
+    // Um titulo cotado em dolares: 10 accoes a 20 USD, mas o netValue diz que
+    // sairam 184,00 EUR da conta. A serie tem de ficar em euros -- o preco por
+    // accao e 18,40 EUR, nao 20.
+    const preco = accountCurrencyPrice(dec("10"), dec("-184.00"));
+    expect(preco.toFixed(2)).toBe("18.40");
+
+    const serie = investedSeries([
+      { date: "2026-01-05", ticker: "AAPL_US_EQ", side: "BUY", quantity: "10", price: preco.toFixed(8) },
+    ]);
+    expect(serie).toEqual([{ date: "2026-01-05", invested: "184.00" }]);
+  });
+
+  it("o sinal do movimento de caixa nao passa para o preco", () => {
+    // Numa compra o netValue e negativo e numa venda e positivo; quem decide
+    // somar ou subtrair na serie e o `side`.
+    expect(accountCurrencyPrice(dec("4"), dec("-80.00")).toFixed(2)).toBe("20.00");
+    expect(accountCurrencyPrice(dec("4"), dec("80.00")).toFixed(2)).toBe("20.00");
+  });
+
+  it("quantidade zero da zero em vez de rebentar a serie inteira", () => {
+    expect(accountCurrencyPrice(dec("0"), dec("-80.00")).toFixed(2)).toBe("0.00");
   });
 });

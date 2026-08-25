@@ -15,8 +15,16 @@ import type { ChartPoint } from "@/types/t212";
 
 // As cores vivem so aqui: o <ChartStyle> do ui/chart.tsx transforma cada
 // entrada com "color" numa custom property --color-<chave>.
+//
+// "(reconstruido)" nao e enfeite: o cartao "Investido" no topo da pagina e esta
+// linha sao dois numeros diferentes, calculados de maneiras diferentes, e
+// podem divergir sem que nenhum esteja errado. O cartao mostra o custo total
+// que o proprio broker reporta; esta linha e reconstruida a partir do
+// historico de ordens, que ignora taxas e nao ve titulos que entraram por
+// transferencia de outra corretora (nunca tiveram uma compra). Sem a distincao
+// no rotulo, a diferenca parecia um defeito.
 const config = {
-  invested: { label: "Investido", color: "var(--chart-savings)" },
+  invested: { label: "Investido (reconstruido)", color: "var(--chart-savings)" },
   marketValue: { label: "Valor de mercado", color: "var(--chart-income)" },
 } satisfies ChartConfig;
 

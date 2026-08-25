@@ -1,7 +1,11 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { loadT212Config } from "./t212.config";
-import { investedSeries, type InvestedEvent } from "./t212.invested";
+import {
+  accountCurrencyPrice,
+  investedSeries,
+  type InvestedEvent,
+} from "./t212.invested";
 import { mergeChart, type ChartPoint } from "./t212.chart";
 import { derivedCutoff, crossesToBudget } from "./t212.bridge";
 import { prismaRepo } from "./t212.repo";
@@ -57,7 +61,13 @@ export async function getChart(userId: string): Promise<{ points: ChartPoint[] }
     prisma.brokerOrder.findMany({
       where: { userId },
       orderBy: { filledAt: "asc" },
-      select: { filledAt: true, ticker: true, side: true, quantity: true, price: true },
+      select: {
+        filledAt: true,
+        ticker: true,
+        side: true,
+        quantity: true,
+        netValue: true,
+      },
     }),
     prisma.portfolioSnapshot.findMany({
       where: { userId },
@@ -66,12 +76,15 @@ export async function getChart(userId: string): Promise<{ points: ChartPoint[] }
     }),
   ]);
 
+  // O preco vem do netValue, nao do `price` da execucao: o `price` esta na
+  // moeda do instrumento e a serie tem de ficar toda na moeda da conta, que e
+  // aquela em que a linha de valor de mercado esta desenhada.
   const events: InvestedEvent[] = orders.map((o) => ({
     date: o.filledAt.toISOString().slice(0, 10),
     ticker: o.ticker,
     side: o.side,
     quantity: o.quantity.toFixed(8),
-    price: o.price.toFixed(8),
+    price: accountCurrencyPrice(o.quantity, o.netValue).toFixed(8),
   }));
 
   return {
