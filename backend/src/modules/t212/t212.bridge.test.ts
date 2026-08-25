@@ -6,6 +6,7 @@ import {
   reconcilePlan,
   derivedCutoff,
   crossesToBudget,
+  excelMonthCap,
   runBridge,
   BRIDGE_PREFIX,
   type BridgeRepo,
@@ -120,6 +121,60 @@ describe("crossesToBudget", () => {
     expect(crossesToBudget("DEPOSIT", "2020-01-01", null)).toBe(true);
     expect(crossesToBudget("WITHDRAW", "2020-01-01", null)).toBe(true);
     expect(crossesToBudget("INTEREST_ON_FREE_CASH", "2020-01-01", null)).toBe(true);
+  });
+});
+
+describe("excelMonthCap", () => {
+  // O parser cria uma celula para qualquer mes com valor nao-nulo, meses
+  // futuros incluidos. Sem este limite, uma folha com a renda preenchida ate
+  // Dezembro punha o corte em 2027-01-01 e a ponte nao escrevia nada no
+  // orcamento durante um ano inteiro.
+  const monthDate = (year: number, month: number) =>
+    new Date(Date.UTC(year, month - 1, 1, 12, 0, 0));
+
+  const agora = new Date("2026-08-25T10:00:00Z");
+
+  it("uma transaccao de um mes futuro fica fora do limite", () => {
+    // Dezembro de 2026, com "agora" em Agosto de 2026.
+    expect(monthDate(2026, 12).getTime()).toBeGreaterThanOrEqual(
+      excelMonthCap(agora).getTime()
+    );
+  });
+
+  it("a transaccao do mes corrente conta -- e gravada no dia 1 ao meio-dia UTC", () => {
+    expect(monthDate(2026, 8).getTime()).toBeLessThan(
+      excelMonthCap(agora).getTime()
+    );
+  });
+
+  it("os meses passados contam todos", () => {
+    for (let m = 1; m <= 8; m += 1) {
+      expect(monthDate(2026, m).getTime()).toBeLessThan(
+        excelMonthCap(agora).getTime()
+      );
+    }
+  });
+
+  it("uma folha com meses futuros nao empurra o corte para alem do mes corrente", () => {
+    // O caminho todo: a folha cobre Janeiro a Dezembro de 2026, mas so ate
+    // Agosto e que ja aconteceu. O corte tem de ser 2026-09-01, nao 2027-01-01.
+    const celulas = Array.from({ length: 12 }, (_, i) => monthDate(2026, i + 1));
+    const cap = excelMonthCap(agora);
+    const passados = celulas.filter((d) => d.getTime() < cap.getTime());
+    const ultimo = passados[passados.length - 1];
+
+    const corte = derivedCutoff({
+      year: ultimo.getUTCFullYear(),
+      month: ultimo.getUTCMonth() + 1,
+    });
+
+    expect(corte).toBe("2026-09-01");
+  });
+
+  it("em Dezembro o limite passa para Janeiro do ano seguinte", () => {
+    expect(excelMonthCap(new Date("2026-12-20T10:00:00Z")).toISOString()).toBe(
+      "2027-01-01T00:00:00.000Z"
+    );
   });
 });
 

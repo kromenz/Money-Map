@@ -57,6 +57,24 @@ function day(iso: string): string {
   return iso.slice(0, 10);
 }
 
+/**
+ * Limite superior (exclusivo) das transacoes da folha que ja aconteceram: o
+ * primeiro instante do mes seguinte ao de agora, em UTC.
+ *
+ * O parser cria uma celula para qualquer mes com valor nao-nulo, meses futuros
+ * incluidos -- uma renda fixa preenchida ate Dezembro, um seguro anual. Sem
+ * este limite, o maximo global sobre as transacoes de origem `excel` devolvia
+ * Dezembro, o derivedCutoff devolvia Janeiro do ano seguinte, e a ponte nao
+ * escrevia nada durante o ano inteiro. O utilizador via "movimentos anteriores
+ * a 2027-01-01 nao entram na grelha" e nao tinha como perceber porque.
+ *
+ * O mes corrente conta: as transacoes da folha ficam gravadas no dia 1 ao
+ * meio-dia UTC, portanto a do mes de agora e sempre anterior a este limite.
+ */
+export function excelMonthCap(now: Date): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+}
+
 /** O primeiro dia nao coberto pela folha. Sem folha, nao ha corte. */
 export function derivedCutoff(
   last: { year: number; month: number } | null

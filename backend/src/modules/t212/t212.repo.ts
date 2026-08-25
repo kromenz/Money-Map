@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import type { SyncRepo } from "./t212.sync";
-import { BRIDGE_PREFIX } from "./t212.bridge";
+import { BRIDGE_PREFIX, excelMonthCap } from "./t212.bridge";
 
 /** Dinheiro chega aqui em string e vira Decimal. Nunca passa por um float. */
 const dec = (v: string) => new Prisma.Decimal(v);
@@ -155,8 +155,16 @@ export const prismaRepo: SyncRepo = {
   },
 
   async lastExcelMonth(userId) {
+    // O limite ao mes corrente nao e enfeite: a folha tem meses futuros
+    // preenchidos (rendas fixas, seguros anuais), e sem ele o maximo global
+    // empurrava o corte para Janeiro do ano seguinte e a ponte deixava de
+    // escrever no orcamento durante um ano inteiro, sem sinal nenhum.
     const row = await prisma.transaction.findFirst({
-      where: { userId, source: "excel" },
+      where: {
+        userId,
+        source: "excel",
+        date: { lt: excelMonthCap(new Date()) },
+      },
       orderBy: { date: "desc" },
       select: { date: true },
     });
