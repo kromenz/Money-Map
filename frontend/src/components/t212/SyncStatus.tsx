@@ -1,14 +1,7 @@
 "use client";
 
+import { t212StageLabel } from "@/lib/t212-labels";
 import type { SyncStatus as Status } from "@/types/t212";
-
-const LABELS: Record<string, string> = {
-  positions: "Carteira",
-  summary: "Conta",
-  orders: "Ordens",
-  dividends: "Dividendos",
-  transactions: "Caixa",
-};
 
 function when(iso: string | null): string {
   if (!iso) return "nunca";
@@ -34,7 +27,7 @@ export function SyncStatus({
       {status.map((s) => (
         <span key={s.kind} className="flex items-center gap-1">
           <span className={s.lastError ? "text-destructive" : ""}>
-            {LABELS[s.kind] ?? s.kind}
+            {t212StageLabel(s.kind)}
           </span>
           <span className="tabular-nums">{when(s.lastRunAt)}</span>
           {s.lastError ? (

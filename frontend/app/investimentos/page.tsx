@@ -9,11 +9,16 @@ import { PortfolioSummary } from "../../src/components/t212/PortfolioSummary";
 import { SyncStatus } from "../../src/components/t212/SyncStatus";
 import { NotConfigured } from "../../src/components/t212/NotConfigured";
 import { ThemeToggle } from "../../src/components/ThemeToggle";
+import { t212StageLabel } from "../../src/lib/t212-labels";
+
+// O detalhe tecnico (mensagem crua do axios) vive so no title, nunca no
+// texto visivel -- o resto da pagina evita erros crus de proposito.
+type SyncError = { message: string; detail?: string };
 
 export default function InvestimentosPage() {
   const { user, loading } = useRequireAuth("/");
   const queryClient = useQueryClient();
-  const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<SyncError | null>(null);
 
   const { data, isPending, isError } = useQuery({
     queryKey: ["t212-overview"],
@@ -27,7 +32,11 @@ export default function InvestimentosPage() {
       const falhadas = report.stages.filter((s) => !s.ok);
       setSyncError(
         falhadas.length
-          ? `Etapas com erro: ${falhadas.map((s) => s.kind).join(", ")}`
+          ? {
+              message: `Etapas com erro: ${falhadas
+                .map((s) => t212StageLabel(s.kind))
+                .join(", ")}`,
+            }
           : null
       );
       // Tudo o que a pagina mostra vem do espelho, portanto tudo re-le.
@@ -35,7 +44,14 @@ export default function InvestimentosPage() {
       queryClient.invalidateQueries({ queryKey: ["t212-chart"] });
     },
     onError: (err: unknown) => {
-      setSyncError(err instanceof Error ? err.message : "Sincronizacao falhou");
+      // A mensagem do axios ("Request failed with status code 500") nao diz o
+      // que fazer a seguir. O detalhe tecnico fica na consola e no title.
+      console.error("t212 sync failed", err);
+      setSyncError({
+        message:
+          "A sincronizacao nao chegou a correr: o servidor nao respondeu como esperado.",
+        detail: err instanceof Error ? err.message : undefined,
+      });
     },
   });
 
@@ -72,7 +88,9 @@ export default function InvestimentosPage() {
           />
 
           {syncError ? (
-            <p className="text-xs text-destructive">{syncError}</p>
+            <p className="text-xs text-destructive" title={syncError.detail}>
+              {syncError.message}
+            </p>
           ) : null}
 
           {data.cutoff ? (
