@@ -50,14 +50,29 @@ export default function InvestimentosPage() {
     mutationFn: syncNow,
     onSuccess: (report) => {
       const falhadas = report.stages.filter((s) => !s.ok);
+      // O `deleted` da etapa da ponte era calculado, tipado, e nunca mostrado.
+      // O caso que o motivou -- importar uma folha nova, o corte avancar, e o
+      // sync seguinte apagar dezenas de linhas do orcamento -- e visivel na
+      // grelha e so aqui e que ha contexto para o explicar.
+      const apagadas = report.stages.find((s) => s.kind === "bridge")?.deleted ?? 0;
+
+      const linhas: string[] = [];
+      if (falhadas.length) {
+        linhas.push(
+          `Etapas com erro: ${falhadas.map((s) => t212StageLabel(s.kind)).join(", ")}`
+        );
+      }
+      if (apagadas > 0) {
+        linhas.push(
+          apagadas === 1
+            ? "1 movimento da corretora saiu da grelha do orcamento: a folha ja cobre esse mes e passou a representa-lo."
+            : `${apagadas} movimentos da corretora sairam da grelha do orcamento: a folha ja cobre esses meses e passou a representa-los.`
+        );
+      }
+
       setSyncNotice(
-        falhadas.length
-          ? {
-              tone: "error",
-              message: `Etapas com erro: ${falhadas
-                .map((s) => t212StageLabel(s.kind))
-                .join(", ")}`,
-            }
+        linhas.length
+          ? { tone: falhadas.length ? "error" : "info", message: linhas.join(" ") }
           : null
       );
       // Tudo o que a pagina mostra vem do espelho, portanto tudo re-le.
