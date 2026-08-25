@@ -32,6 +32,8 @@ export type StatusView = {
   kind: string;
   lastRunAt: string | null;
   lastError: string | null;
+  /** Quantos itens a ultima corrida desta etapa saltou no Zod. Uma etapa que salta itens nao pode parecer igual a uma que correu limpa. */
+  lastSkipped: number;
 };
 
 /** Dinheiro sai em string, como no resto da API. */
@@ -53,11 +55,12 @@ export function toHoldingViews(rows: HoldingRecord[]): HoldingView[] {
 }
 
 export function toStatusViews(
-  rows: { kind: string; lastRunAt: Date | null; lastError: string | null }[]
+  rows: { kind: string; lastRunAt: Date | null; lastError: string | null; lastSkipped: number }[]
 ): StatusView[] {
   return rows.map((r) => ({
     kind: r.kind,
     lastRunAt: r.lastRunAt ? r.lastRunAt.toISOString() : null,
     lastError: r.lastError,
+    lastSkipped: r.lastSkipped,
   }));
 }

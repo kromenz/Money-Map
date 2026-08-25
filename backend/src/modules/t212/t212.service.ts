@@ -33,7 +33,10 @@ export async function getOverview(userId: string): Promise<OverviewResponse> {
   const [snapshot, holdings, states, lastExcel] = await Promise.all([
     prisma.portfolioSnapshot.findFirst({ where: { userId }, orderBy: { date: "desc" } }),
     prisma.holding.findMany({ where: { userId } }),
-    prisma.syncState.findMany({ where: { userId }, select: { kind: true, lastRunAt: true, lastError: true } }),
+    prisma.syncState.findMany({
+      where: { userId },
+      select: { kind: true, lastRunAt: true, lastError: true, lastSkipped: true },
+    }),
     prismaRepo.lastExcelMonth(userId),
   ]);
 

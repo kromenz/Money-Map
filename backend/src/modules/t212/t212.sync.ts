@@ -58,6 +58,8 @@ export type SyncRepo = {
     patch: {
       lastRunAt?: Date;
       lastError?: string | null;
+      /** Quantos itens a corrida saltou no Zod. O StageReport ja contava; so faltava chegar aqui. */
+      lastSkipped?: number;
       backfillCursor?: string | null;
       backfillDone?: boolean;
     }
@@ -139,6 +141,10 @@ async function stage(
     .setState(userId, kind, {
       lastRunAt: deps.now(),
       lastError: report.error ?? null,
+      // report.skipped fica no que foi contado ate ao ponto da falha, se
+      // houver uma -- melhor do que apagar o numero so porque a etapa nao
+      // acabou limpa.
+      lastSkipped: report.skipped,
     })
     .catch(() => undefined);
 

@@ -39,15 +39,30 @@ describe("toHoldingViews", () => {
 describe("toStatusViews", () => {
   it("expoe a data e o erro de cada etapa", () => {
     const views = toStatusViews([
-      { kind: "orders", lastRunAt: new Date("2026-08-25T10:00:00Z"), lastError: null },
-      { kind: "dividends", lastRunAt: new Date("2026-08-25T10:00:00Z"), lastError: "429" },
+      { kind: "orders", lastRunAt: new Date("2026-08-25T10:00:00Z"), lastError: null, lastSkipped: 0 },
+      { kind: "dividends", lastRunAt: new Date("2026-08-25T10:00:00Z"), lastError: "429", lastSkipped: 0 },
     ]);
 
-    expect(views[0]).toEqual({ kind: "orders", lastRunAt: "2026-08-25T10:00:00.000Z", lastError: null });
+    expect(views[0]).toEqual({
+      kind: "orders",
+      lastRunAt: "2026-08-25T10:00:00.000Z",
+      lastError: null,
+      lastSkipped: 0,
+    });
     expect(views[1].lastError).toBe("429");
   });
 
   it("uma etapa que nunca correu tem data nula", () => {
-    expect(toStatusViews([{ kind: "summary", lastRunAt: null, lastError: null }])[0].lastRunAt).toBeNull();
+    expect(
+      toStatusViews([{ kind: "summary", lastRunAt: null, lastError: null, lastSkipped: 0 }])[0].lastRunAt
+    ).toBeNull();
+  });
+
+  it("expoe quantos itens a ultima corrida saltou -- e o numero que ficava preso no StageReport", () => {
+    const views = toStatusViews([
+      { kind: "positions", lastRunAt: new Date("2026-08-25T10:00:00Z"), lastError: null, lastSkipped: 7 },
+    ]);
+
+    expect(views[0].lastSkipped).toBe(7);
   });
 });

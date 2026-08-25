@@ -200,6 +200,37 @@ describe("syncAll", () => {
     expect(stage.ok).toBe(true);
   });
 
+  it("grava o numero de saltados no estado, junto do lastRunAt e do lastError", async () => {
+    // O StageReport ja contava os saltados, mas o numero morria ali: nao
+    // chegava ao SyncState nem a interface. Foi assim que sete posicoes
+    // desapareceram em silencio com a etapa a reportar verde.
+    const setState = vi.fn(async () => {});
+    const repo = fakeRepo({ setState });
+    const client = fakeClient({ transactions: [[cashItem("c1"), { ...cashItem("c2"), type: "MISTERIO" }]] });
+
+    await syncAll("u1", deps(client, repo));
+
+    expect(setState).toHaveBeenCalledWith(
+      "u1",
+      "transactions",
+      expect.objectContaining({ lastSkipped: 1 })
+    );
+  });
+
+  it("uma etapa sem saltados grava lastSkipped:0, nao undefined", async () => {
+    const setState = vi.fn(async () => {});
+    const repo = fakeRepo({ setState });
+    const client = fakeClient({ orders: [[orderItem(1, 1)]] });
+
+    await syncAll("u1", deps(client, repo));
+
+    expect(setState).toHaveBeenCalledWith(
+      "u1",
+      "orders",
+      expect.objectContaining({ lastSkipped: 0 })
+    );
+  });
+
   it("uma etapa que falha nao impede as seguintes", async () => {
     const repo = fakeRepo({
       saveDividends: vi.fn(async () => { throw new Error("base em baixo"); }),
