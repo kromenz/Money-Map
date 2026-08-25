@@ -39,6 +39,14 @@ function resetToMs(reset: number, now: number): number {
   return reset * 1000 - now;
 }
 
+/**
+ * Espera minima quando um 429 nao vem com x-ratelimit-reset nem com
+ * x-ratelimit-period: 5s e a janela do endpoint mais restritivo que
+ * consumimos (/account/summary, 1 pedido por 5s), por isso esperar isso
+ * chega para qualquer outro endpoint tambem -- nenhum e mais apertado.
+ */
+const DEFAULT_BACKOFF_MS = 5_000;
+
 export class T212Client {
   private nextAllowedAt = 0;
 
@@ -93,7 +101,14 @@ export class T212Client {
     // guardado de uma corrida anterior -- retomar e so pedi-lo outra vez.
     let next: string | null = startPath ?? `${path}?${params.toString()}`;
 
-    while (next) {
+    // Salvaguarda contra a API, nao contra nos: se o nextPagePath devolvido
+    // apontar para um caminho ja pedido nesta iteracao, isto e um backfill em
+    // pano de fundo contra um endpoint com limites por conta -- ciclar para
+    // sempre e o pior desfecho possivel, por isso paramos em vez disso.
+    const seen = new Set<string>();
+
+    while (next && !seen.has(next)) {
+      seen.add(next);
       // Anotacoes explicitas aqui evitam um TS7022: sem elas o compilador
       // enreda-se a inferir o tipo de "page" a partir do proprio generator
       // que o consome, e declara-o circular.
@@ -111,17 +126,38 @@ export class T212Client {
   }
 
   private noteRemaining(res: Response): void {
+    // Number(null) e 0, igual a um header que diga "0" -- sem o has(), uma
+    // resposta que simplesmente nao manda x-ratelimit-remaining seria lida
+    // como limite esgotado e impunha uma espera que ninguem pediu.
+    if (!res.headers.has("x-ratelimit-remaining")) return;
     const remaining = Number(res.headers.get("x-ratelimit-remaining"));
     if (!Number.isFinite(remaining) || remaining > 0) return;
-    this.nextAllowedAt =
-      this.deps.now() +
-      resetToMs(Number(res.headers.get("x-ratelimit-reset")), this.deps.now());
+    const now = this.deps.now();
+    this.nextAllowedAt = now + resetToMs(Number(res.headers.get("x-ratelimit-reset")), now);
   }
 
   private noteReset(res: Response): void {
+    const now = this.deps.now();
     this.nextAllowedAt =
-      this.deps.now() +
-      resetToMs(Number(res.headers.get("x-ratelimit-reset")), this.deps.now());
+      now +
+      (res.headers.has("x-ratelimit-reset")
+        ? resetToMs(Number(res.headers.get("x-ratelimit-reset")), now)
+        : this.fallbackBackoffMs(res));
+  }
+
+  /**
+   * Sem x-ratelimit-reset, um 429 nao pode ficar com espera nenhuma -- seria
+   * bater outra vez no mesmo instante contra um endpoint que acabou de
+   * recusar, queimando a unica retentativa que ha. x-ratelimit-period (em
+   * segundos) diz a janela do proprio endpoint quando vem; sem ele tambem,
+   * cai no DEFAULT_BACKOFF_MS.
+   */
+  private fallbackBackoffMs(res: Response): number {
+    if (res.headers.has("x-ratelimit-period")) {
+      const period = Number(res.headers.get("x-ratelimit-period"));
+      if (Number.isFinite(period)) return period * 1000;
+    }
+    return DEFAULT_BACKOFF_MS;
   }
 }
 
