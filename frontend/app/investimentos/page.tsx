@@ -8,6 +8,7 @@ import { fetchChart, fetchOverview, syncNow } from "../../src/services/t212.serv
 import { PortfolioSummary } from "../../src/components/t212/PortfolioSummary";
 import { SyncStatus } from "../../src/components/t212/SyncStatus";
 import { PortfolioChart } from "../../src/components/t212/PortfolioChart";
+import { HoldingsTable } from "../../src/components/t212/HoldingsTable";
 import { NotConfigured } from "../../src/components/t212/NotConfigured";
 import { ThemeToggle } from "../../src/components/ThemeToggle";
 import { t212StageLabel } from "../../src/lib/t212-labels";
@@ -98,6 +99,11 @@ export default function InvestimentosPage() {
           />
 
           <PortfolioChart points={chart.data ?? []} />
+
+          <section className="flex flex-col gap-3">
+            <h2 className="text-sm font-medium">Carteira</h2>
+            <HoldingsTable holdings={data.holdings} />
+          </section>
 
           {syncError ? (
             <p className="text-xs text-destructive" title={syncError.detail}>
