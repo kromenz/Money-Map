@@ -64,7 +64,15 @@ export const historicalOrderSchema = z.object({
       quantity: z.number(),
       walletImpact: z
         .object({
-          netValue: z.number().default(0),
+          // .optional() e nao .default(0): o toOrderRows tem um recurso
+          // escrito de proposito -- `walletImpact?.netValue ?? signed` --
+          // que cai no preco vezes quantidade quando o valor nao vem. Com
+          // .default(0), o Zod preenchia zero, o ?? nao disparava (zero nao e
+          // nulo) e gravava-se "0.00". Desde que a serie do grafico passou a
+          // derivar o preco em moeda da conta a partir do netValue, uma
+          // execucao assim entrava com custo zero e subavaliava a linha do
+          // investido sem sinal nenhum.
+          netValue: z.number().optional(),
           fxRate: z.number().optional(),
           realisedProfitLoss: z.number().default(0),
           taxes: z.array(z.unknown()).optional(),

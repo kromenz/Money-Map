@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { money, qty, toHoldingRows, toOrderRows, toDividendRows, toCashFlowRows } from "./t212.map";
+import { historicalOrderSchema, parseItems } from "./t212.schemas";
 
 describe("money e qty", () => {
   it("dinheiro fica com duas casas e quantidade com oito", () => {
@@ -136,5 +137,61 @@ describe("toCashFlowRows", () => {
       { externalId: "d-1", dateTime: "2026-04-01T09:00:00Z", amount: "500.00", currency: "EUR", type: "DEPOSIT" },
       { externalId: "f-1", dateTime: "2026-04-02T09:00:00Z", amount: "-0.70", currency: "EUR", type: "FEE" },
     ]);
+  });
+});
+
+describe("netValue em falta dentro de um walletImpact presente", () => {
+  // Este e o caso que o `??` do toOrderRows sempre quis apanhar e que o
+  // .default(0) do Zod desarmava: o walletImpact vem, mas sem netValue. Com o
+  // valor por omissao, o Zod preenchia zero, o ?? nao disparava (zero nao e
+  // nulo) e gravava-se "0.00". Como a serie do grafico deriva o preco em moeda
+  // da conta a partir do netValue, essa execucao entrava com custo zero e
+  // subavaliava a linha do investido sem sinal nenhum.
+  //
+  // O teste passa pelo Zod de proposito: o defeito estava no schema, nao no
+  // mapa, e um teste que so chamasse toOrderRows nunca o teria apanhado.
+  const cru = (walletImpact: unknown) => ({
+    order: {
+      id: 991,
+      ticker: "AAPL_US_EQ",
+      side: "BUY",
+      type: "MARKET",
+      status: "FILLED",
+      initiatedFrom: "WEB",
+    },
+    fill: { id: 1, filledAt: "2026-03-02T14:31:00Z", price: 10, quantity: 3, walletImpact },
+  });
+
+  it("cai no valor derivado do preco e da quantidade, e nao em zero", () => {
+    const parsed = parseItems(historicalOrderSchema, [
+      cru({ fxRate: 1.08, realisedProfitLoss: 0, taxes: [] }),
+    ]);
+    expect(parsed.skipped).toEqual([]);
+
+    const [row] = toOrderRows(parsed.items);
+    expect(row.netValue).toBe("-30.00");
+    expect(row.netValue).not.toBe("0.00");
+  });
+
+  it("um netValue que venha mesmo a zero continua a valer zero", () => {
+    // A distincao que o .optional() introduz e entre ausente e zero. Um zero
+    // declarado pela API e um dado, nao uma lacuna.
+    const parsed = parseItems(historicalOrderSchema, [
+      cru({ netValue: 0, fxRate: 1.08, realisedProfitLoss: 0, taxes: [] }),
+    ]);
+
+    const [row] = toOrderRows(parsed.items);
+    expect(row.netValue).toBe("0.00");
+  });
+
+  it("os outros campos do mesmo objecto continuam com os seus omissos", () => {
+    // realisedProfitLoss mantem .default(0) e ninguem o le com ??; fxRate e
+    // taxes ja eram opcionais. A mudanca ao netValue nao lhes toca.
+    const parsed = parseItems(historicalOrderSchema, [cru({ netValue: -30 })]);
+    const [row] = toOrderRows(parsed.items);
+
+    expect(parsed.items[0].fill!.walletImpact!.realisedProfitLoss).toBe(0);
+    expect(row.fxRate).toBeNull();
+    expect(row.taxes).toBeNull();
   });
 });
