@@ -294,6 +294,10 @@ model SyncState {
   backfillCursor String?
   lastRunAt      DateTime?
   lastError      String?
+  // Quantos itens a ultima corrida desta etapa saltou no Zod. Sete ETFs em
+  // euros desapareceram de uma sincronizacao real com a etapa a reportar
+  // ok:true -- o numero existia no StageReport mas morria ali, nunca gravado.
+  lastSkipped    Int       @default(0)
   updatedAt      DateTime  @updatedAt
 
   @@unique([userId, kind])
