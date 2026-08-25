@@ -7,7 +7,10 @@ import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -58,6 +61,23 @@ export function AddExpenseBar({
     value: c.categoryId,
     label: c.group === "" ? c.name : `${c.group} · ${c.name}`,
   }));
+
+  // Agrupadas para a lista, pela ordem em que a folha as tem. Uma lista plana
+  // de trinta e tal linhas com o grupo repetido em cada uma ("Transportation ·
+  // Fuel", "Transportation · Auto Insurance", ...) e comprida de mais para ler
+  // e desperdica a largura toda a repetir a mesma palavra. Com o grupo em
+  // cabecalho, cada linha fica so com o nome.
+  const grouped: { group: string; items: typeof categoryItems }[] = [];
+  for (const c of categories) {
+    const last = grouped[grouped.length - 1];
+    if (!last || last.group !== c.group) {
+      grouped.push({ group: c.group, items: [] });
+    }
+    grouped[grouped.length - 1].items.push({
+      value: c.categoryId,
+      label: c.name,
+    });
+  }
   const monthItems = MONTH_LABELS.map((label, i) => ({ value: i + 1, label }));
 
   const normalizedAmount = amount.replace(",", ".");
@@ -122,11 +142,31 @@ export function AddExpenseBar({
           <TagIcon className="text-muted-foreground" />
           <SelectValue placeholder="Category…" />
         </SelectTrigger>
-        <SelectContent>
-          {categoryItems.map((c) => (
-            <SelectItem key={c.value} value={c.value} className="py-1.5">
-              {c.label}
-            </SelectItem>
+        {/*
+          alignItemWithTrigger a false: por omissao o painel sobrepoe-se ao
+          gatilho a alinhar a opcao escolhida por cima dele, o que com trinta e
+          tal categorias o punha a tapar metade da pagina. Assim cai por baixo,
+          como um menu normal.
+
+          A largura deixa de ser a do gatilho (w-(--anchor-width) no
+          ui/select.tsx) e passa a acompanhar o conteudo ate um tecto, porque os
+          nomes desta folha sao longos ("Utilities (electric, gas, water,
+          etc.)") e estavam a ser cortados a direito, sem sequer reticencias.
+        */}
+        <SelectContent
+          alignItemWithTrigger={false}
+          align="start"
+          className="max-h-[22rem] w-auto min-w-(--anchor-width) max-w-[min(30rem,92vw)]">
+          {grouped.map((g, i) => (
+            <SelectGroup key={g.group || "__sem-grupo"}>
+              {i > 0 && <SelectSeparator />}
+              {g.group !== "" && <SelectLabel>{g.group}</SelectLabel>}
+              {g.items.map((c) => (
+                <SelectItem key={c.value} value={c.value} className="py-1.5">
+                  <span className="truncate">{c.label}</span>
+                </SelectItem>
+              ))}
+            </SelectGroup>
           ))}
         </SelectContent>
       </Select>

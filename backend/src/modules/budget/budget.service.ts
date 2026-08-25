@@ -6,6 +6,7 @@ import {
   type ParsedWorkbook,
 } from "./budget.parser";
 import { cellParcels } from "./budget.parcels";
+import { planArchive } from "./budget.archive";
 import { compareScope } from "./budget.verify";
 import type { MonthComparison, StructureReport } from "./budget.verify";
 import { diffCells, type DiffCell, type WorkbookDiff } from "./budget.diff";
@@ -185,6 +186,45 @@ async function writeAndVerify(
     });
     const after = await tx.category.findMany({ where: { userId } });
     for (const c of after) categoryIds.set(categoryKey(c), c.id);
+  }
+
+  // 1b. Arquivar o que a folha ja nao tem.
+  //
+  // A importacao so sabia criar. Uma folha reimportada depois de o parser
+  // mudar de ideias sobre o que e um grupo deixava as categorias antigas para
+  // tras, e elas ficavam para sempre na grelha e na lista de escolha -- foi
+  // assim que apareceram grupos como "Car Payments" ou "Prescriptions", que
+  // sao categorias e nunca foram grupos.
+  const all = await tx.category.findMany({
+    where: { userId },
+    select: { id: true, section: true, group: true, name: true, archived: true },
+  });
+
+  // Quais e que tem transaccoes, de qualquer ano e de qualquer origem. Uma so
+  // consulta em vez de uma por categoria: sao dezenas de categorias, e a
+  // transaccao interactiva tem tempo contado.
+  const used = await tx.transaction.findMany({
+    where: { userId, categoryId: { in: all.map((c) => c.id) } },
+    select: { categoryId: true },
+    distinct: ["categoryId"],
+  });
+  const idsWithTransactions = new Set(
+    used.map((u) => u.categoryId).filter((id): id is string => id !== null)
+  );
+
+  const archive = planArchive(all, parsed.categories, idsWithTransactions);
+
+  if (archive.toArchive.length > 0) {
+    await tx.category.updateMany({
+      where: { userId, id: { in: archive.toArchive } },
+      data: { archived: true },
+    });
+  }
+  if (archive.toRestore.length > 0) {
+    await tx.category.updateMany({
+      where: { userId, id: { in: archive.toRestore } },
+      data: { archived: false },
+    });
   }
 
   // 2. Transacoes: apagar o ambito e reescrever.
