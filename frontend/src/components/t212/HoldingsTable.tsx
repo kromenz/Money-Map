@@ -14,14 +14,14 @@ type Column = {
 };
 
 const COLUMNS: Column[] = [
-  { key: "ticker", label: "Titulo", numeric: false, value: (h) => h.name || h.ticker, render: (h) => h.name || h.ticker },
-  { key: "quantity", label: "Qtd", numeric: true, value: (h) => Number(h.quantity), render: (h) => Number(h.quantity).toFixed(4) },
-  { key: "averagePricePaid", label: "Preco medio", numeric: true, value: (h) => Number(h.averagePricePaid), render: (h) => formatAmount(Number(h.averagePricePaid)) },
-  { key: "currentPrice", label: "Preco atual", numeric: true, value: (h) => Number(h.currentPrice), render: (h) => formatAmount(Number(h.currentPrice)) },
-  { key: "currentValue", label: "Valor", numeric: true, value: (h) => Number(h.currentValue), render: (h) => formatEur(Number(h.currentValue)) },
+  { key: "ticker", label: "Instrument", numeric: false, value: (h) => h.name || h.ticker, render: (h) => h.name || h.ticker },
+  { key: "quantity", label: "Qty", numeric: true, value: (h) => Number(h.quantity), render: (h) => Number(h.quantity).toFixed(4) },
+  { key: "averagePricePaid", label: "Avg price", numeric: true, value: (h) => Number(h.averagePricePaid), render: (h) => formatAmount(Number(h.averagePricePaid)) },
+  { key: "currentPrice", label: "Price", numeric: true, value: (h) => Number(h.currentPrice), render: (h) => formatAmount(Number(h.currentPrice)) },
+  { key: "currentValue", label: "Value", numeric: true, value: (h) => Number(h.currentValue), render: (h) => formatEur(Number(h.currentValue)) },
   { key: "unrealizedPl", label: "P/L", numeric: true, value: (h) => Number(h.unrealizedPl), render: (h) => formatEur(Number(h.unrealizedPl)) },
-  { key: "weight", label: "Peso", numeric: true, value: (h) => h.weight ?? 0, render: (h) => formatPercent(h.weight) },
-  { key: "fxImpact", label: "Cambio", numeric: true, value: (h) => Number(h.fxImpact), render: (h) => formatEur(Number(h.fxImpact)) },
+  { key: "weight", label: "Weight", numeric: true, value: (h) => h.weight ?? 0, render: (h) => formatPercent(h.weight) },
+  { key: "fxImpact", label: "FX impact", numeric: true, value: (h) => Number(h.fxImpact), render: (h) => formatEur(Number(h.fxImpact)) },
 ];
 
 /**
@@ -51,7 +51,7 @@ export function HoldingsTable({ holdings }: { holdings: Holding[] }) {
   }, [holdings, sort]);
 
   if (holdings.length === 0) {
-    return <p className="text-sm text-muted-foreground">A carteira esta vazia.</p>;
+    return <p className="text-sm text-muted-foreground">The portfolio is empty.</p>;
   }
 
   return (

@@ -308,8 +308,8 @@ export default function DashboardPage() {
             className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted">
             Compare years
           </Link>
-          <Link href="/investimentos" className="text-sm text-muted-foreground hover:text-foreground">
-            Investimentos
+          <Link href="/investments" className="text-sm text-muted-foreground hover:text-foreground">
+            Investments
           </Link>
           <YearPills
             year={year}

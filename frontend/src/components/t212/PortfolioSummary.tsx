@@ -12,19 +12,18 @@ export function PortfolioSummary({ snapshot }: { snapshot: Snapshot | null }) {
   if (!snapshot) {
     return (
       <p className="text-sm text-muted-foreground">
-        Ainda nao ha nenhum retrato da carteira. Sincroniza para criar o
-        primeiro.
+        There is no portfolio snapshot yet. Sync to create the first one.
       </p>
     );
   }
 
   const items = [
     { label: "Total", value: formatEur(Number(snapshot.totalValue)) },
-    { label: "Investido", value: formatEur(Number(snapshot.invested)) },
-    { label: "Valor de mercado", value: formatEur(Number(snapshot.marketValue)) },
-    { label: "Caixa", value: formatEur(Number(snapshot.cash)) },
-    { label: "P/L nao realizado", value: formatEur(Number(snapshot.unrealizedPl)) },
-    { label: "P/L realizado", value: formatEur(Number(snapshot.realizedPl)) },
+    { label: "Invested", value: formatEur(Number(snapshot.invested)) },
+    { label: "Market value", value: formatEur(Number(snapshot.marketValue)) },
+    { label: "Cash", value: formatEur(Number(snapshot.cash)) },
+    { label: "Unrealized P/L", value: formatEur(Number(snapshot.unrealizedPl)) },
+    { label: "Realized P/L", value: formatEur(Number(snapshot.realizedPl)) },
   ];
 
   return (

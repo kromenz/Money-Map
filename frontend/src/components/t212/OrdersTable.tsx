@@ -26,7 +26,7 @@ export function OrdersTable() {
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-sm font-medium">Ordens</h2>
+        <h2 className="text-sm font-medium">Orders</h2>
         <div className="flex items-center gap-2 text-sm">
           <input
             value={ticker}
@@ -34,7 +34,7 @@ export function OrdersTable() {
               setTicker(e.target.value);
               setOffset(0);
             }}
-            placeholder="Filtrar por titulo"
+            placeholder="Filter by instrument"
             className="rounded-md border px-2 py-1 text-sm"
           />
           <select
@@ -45,9 +45,9 @@ export function OrdersTable() {
             }}
             className="rounded-md border px-2 py-1 text-sm"
           >
-            <option value="">Compras e vendas</option>
-            <option value="BUY">So compras</option>
-            <option value="SELL">So vendas</option>
+            <option value="">Buys and sells</option>
+            <option value="BUY">Buys only</option>
+            <option value="SELL">Sells only</option>
           </select>
         </div>
       </div>
@@ -56,13 +56,13 @@ export function OrdersTable() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
-              <th className="px-2 py-2 text-left">Data</th>
-              <th className="px-2 py-2 text-left">Titulo</th>
-              <th className="px-2 py-2 text-left">Lado</th>
-              <th className="px-2 py-2 text-right">Qtd</th>
-              <th className="px-2 py-2 text-right">Preco</th>
-              <th className="px-2 py-2 text-right">Valor</th>
-              <th className="px-2 py-2 text-right">Cambio</th>
+              <th className="px-2 py-2 text-left">Date</th>
+              <th className="px-2 py-2 text-left">Instrument</th>
+              <th className="px-2 py-2 text-left">Side</th>
+              <th className="px-2 py-2 text-right">Qty</th>
+              <th className="px-2 py-2 text-right">Price</th>
+              <th className="px-2 py-2 text-right">Value</th>
+              <th className="px-2 py-2 text-right">FX rate</th>
             </tr>
           </thead>
           <tbody>
@@ -70,7 +70,7 @@ export function OrdersTable() {
               <tr key={o.externalId} className="border-b last:border-0">
                 <td className="px-2 py-2">{o.filledAt.slice(0, 10)}</td>
                 <td className="px-2 py-2">{o.ticker}</td>
-                <td className="px-2 py-2">{o.side === "BUY" ? "Compra" : "Venda"}</td>
+                <td className="px-2 py-2">{o.side === "BUY" ? "Buy" : "Sell"}</td>
                 <td className="px-2 py-2 text-right tabular-nums">{Number(o.quantity).toFixed(4)}</td>
                 <td className="px-2 py-2 text-right tabular-nums">{Number(o.price).toFixed(2)}</td>
                 <td className="px-2 py-2 text-right tabular-nums">{formatEur(Number(o.netValue))}</td>
@@ -87,16 +87,16 @@ export function OrdersTable() {
         <span>
           {data
             ? data.total === 0
-              ? "Sem ordens"
-              : `${offset + 1}–${Math.min(offset + PAGE, data.total)} de ${data.total}`
+              ? "No orders"
+              : `${offset + 1}–${Math.min(offset + PAGE, data.total)} of ${data.total}`
             : ""}
         </span>
         <div className="flex gap-2">
           <button type="button" disabled={offset === 0} onClick={() => setOffset((o) => Math.max(0, o - PAGE))} className="rounded-md border px-2 py-1 disabled:opacity-40">
-            Anterior
+            Previous
           </button>
           <button type="button" disabled={!data || offset + PAGE >= data.total} onClick={() => setOffset((o) => o + PAGE)} className="rounded-md border px-2 py-1 disabled:opacity-40">
-            Seguinte
+            Next
           </button>
         </div>
       </div>

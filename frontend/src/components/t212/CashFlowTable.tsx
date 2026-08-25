@@ -8,12 +8,12 @@ import { formatEur } from "@/lib/format";
 const PAGE = 50;
 
 const LABELS: Record<string, string> = {
-  DEPOSIT: "Deposito",
-  WITHDRAW: "Levantamento",
-  FEE: "Taxa",
-  TRANSFER: "Transferencia",
-  INTEREST_ON_FREE_CASH: "Juros de caixa",
-  LENDING_INTEREST: "Juros de emprestimo",
+  DEPOSIT: "Deposit",
+  WITHDRAW: "Withdrawal",
+  FEE: "Fee",
+  TRANSFER: "Transfer",
+  INTEREST_ON_FREE_CASH: "Interest on cash",
+  LENDING_INTEREST: "Lending interest",
 };
 
 /**
@@ -32,16 +32,16 @@ export function CashFlowTable() {
 
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-sm font-medium">Caixa</h2>
+      <h2 className="text-sm font-medium">Cash</h2>
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
-              <th className="px-2 py-2 text-left">Data</th>
-              <th className="px-2 py-2 text-left">Tipo</th>
-              <th className="px-2 py-2 text-right">Valor</th>
-              <th className="px-2 py-2 text-left">No orcamento</th>
+              <th className="px-2 py-2 text-left">Date</th>
+              <th className="px-2 py-2 text-left">Type</th>
+              <th className="px-2 py-2 text-right">Amount</th>
+              <th className="px-2 py-2 text-left">In budget</th>
             </tr>
           </thead>
           <tbody>
@@ -51,7 +51,7 @@ export function CashFlowTable() {
                 <td className="px-2 py-2">{LABELS[c.type] ?? c.type}</td>
                 <td className="px-2 py-2 text-right tabular-nums">{formatEur(Number(c.amount))}</td>
                 <td className="px-2 py-2 text-xs text-muted-foreground">
-                  {c.crossesBudget ? "Sim" : "Nao"}
+                  {c.crossesBudget ? "Yes" : "No"}
                 </td>
               </tr>
             ))}
@@ -63,16 +63,16 @@ export function CashFlowTable() {
         <span>
           {data
             ? data.total === 0
-              ? "Sem movimentos"
-              : `${offset + 1}–${Math.min(offset + PAGE, data.total)} de ${data.total}`
+              ? "No movements"
+              : `${offset + 1}–${Math.min(offset + PAGE, data.total)} of ${data.total}`
             : ""}
         </span>
         <div className="flex gap-2">
           <button type="button" disabled={offset === 0} onClick={() => setOffset((o) => Math.max(0, o - PAGE))} className="rounded-md border px-2 py-1 disabled:opacity-40">
-            Anterior
+            Previous
           </button>
           <button type="button" disabled={!data || offset + PAGE >= data.total} onClick={() => setOffset((o) => o + PAGE)} className="rounded-md border px-2 py-1 disabled:opacity-40">
-            Seguinte
+            Next
           </button>
         </div>
       </div>

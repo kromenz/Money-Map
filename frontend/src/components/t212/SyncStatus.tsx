@@ -4,8 +4,8 @@ import { t212StageLabel } from "@/lib/t212-labels";
 import type { SyncStatus as Status } from "@/types/t212";
 
 function when(iso: string | null): string {
-  if (!iso) return "nunca";
-  return new Date(iso).toLocaleString("pt-PT");
+  if (!iso) return "never";
+  return new Date(iso).toLocaleString("en-IE");
 }
 
 /**
@@ -32,7 +32,7 @@ export function SyncStatus({
           <span className="tabular-nums">{when(s.lastRunAt)}</span>
           {s.lastError ? (
             <span className="text-destructive" title={s.lastError}>
-              — falhou
+              — failed
             </span>
           ) : null}
           {/* Nao alarmante, mas visivel: uma etapa que saltou itens no Zod nao
@@ -41,9 +41,9 @@ export function SyncStatus({
           {s.lastSkipped > 0 ? (
             <span
               className="text-amber-600 dark:text-amber-500"
-              title={`${s.lastSkipped} ${s.lastSkipped === 1 ? "item saltado" : "itens saltados"} na ultima corrida`}
+              title={`${s.lastSkipped} ${s.lastSkipped === 1 ? "item was" : "items were"} skipped on the last run`}
             >
-              — {s.lastSkipped} {s.lastSkipped === 1 ? "saltado" : "saltados"}
+              — {s.lastSkipped} skipped
             </span>
           ) : null}
         </span>
@@ -55,7 +55,7 @@ export function SyncStatus({
         disabled={syncing}
         className="rounded-md border px-3 py-1 text-xs font-medium text-foreground disabled:opacity-50"
       >
-        {syncing ? "A sincronizar…" : "Sincronizar agora"}
+        {syncing ? "Syncing…" : "Sync now"}
       </button>
     </div>
   );

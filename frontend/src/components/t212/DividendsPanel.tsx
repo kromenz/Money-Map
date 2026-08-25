@@ -9,7 +9,7 @@ import { dividendsByMonth } from "@/lib/t212-metrics";
 import { formatEur, MONTH_LABELS } from "@/lib/format";
 
 const config = {
-  total: { label: "Dividendos", color: "var(--chart-income)" },
+  total: { label: "Dividends", color: "var(--chart-income)" },
 } satisfies ChartConfig;
 
 export function DividendsPanel() {
@@ -32,7 +32,7 @@ export function DividendsPanel() {
   return (
     <section className="flex flex-col gap-3">
       <div className="flex items-baseline justify-between">
-        <h2 className="text-sm font-medium">Dividendos</h2>
+        <h2 className="text-sm font-medium">Dividends</h2>
         <div className="flex items-center gap-3 text-sm">
           <button type="button" onClick={() => setYear((y) => y - 1)} className="text-muted-foreground hover:text-foreground">←</button>
           <span className="tabular-nums">{year}</span>
@@ -55,11 +55,11 @@ export function DividendsPanel() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
-              <th className="px-2 py-2 text-left">Data</th>
-              <th className="px-2 py-2 text-left">Titulo</th>
-              <th className="px-2 py-2 text-right">Qtd</th>
-              <th className="px-2 py-2 text-right">Valor</th>
-              <th className="px-2 py-2 text-right">Em euros</th>
+              <th className="px-2 py-2 text-left">Date</th>
+              <th className="px-2 py-2 text-left">Instrument</th>
+              <th className="px-2 py-2 text-right">Qty</th>
+              <th className="px-2 py-2 text-right">Amount</th>
+              <th className="px-2 py-2 text-right">In euros</th>
             </tr>
           </thead>
           <tbody>

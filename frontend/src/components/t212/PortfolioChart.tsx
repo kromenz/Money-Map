@@ -24,8 +24,8 @@ import type { ChartPoint } from "@/types/t212";
 // transferencia de outra corretora (nunca tiveram uma compra). Sem a distincao
 // no rotulo, a diferenca parecia um defeito.
 const config = {
-  invested: { label: "Investido (reconstruido)", color: "var(--chart-savings)" },
-  marketValue: { label: "Valor de mercado", color: "var(--chart-income)" },
+  invested: { label: "Invested (reconstructed)", color: "var(--chart-savings)" },
+  marketValue: { label: "Market value", color: "var(--chart-income)" },
 } satisfies ChartConfig;
 
 /**
@@ -42,8 +42,8 @@ export function PortfolioChart({ points }: { points: ChartPoint[] }) {
   if (data.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        Ainda nao ha historico para desenhar. A primeira sincronizacao traz as
-        ordens todas; o valor de mercado comeca a ser medido a partir de hoje.
+        There is no history to draw yet. The first sync brings in every order;
+        the market value only starts being measured from today.
       </p>
     );
   }
