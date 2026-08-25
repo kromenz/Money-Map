@@ -4,9 +4,10 @@ import { useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import useRequireAuth from "../../src/hooks/useRequireAuth";
-import { fetchOverview, syncNow } from "../../src/services/t212.service";
+import { fetchChart, fetchOverview, syncNow } from "../../src/services/t212.service";
 import { PortfolioSummary } from "../../src/components/t212/PortfolioSummary";
 import { SyncStatus } from "../../src/components/t212/SyncStatus";
+import { PortfolioChart } from "../../src/components/t212/PortfolioChart";
 import { NotConfigured } from "../../src/components/t212/NotConfigured";
 import { ThemeToggle } from "../../src/components/ThemeToggle";
 import { t212StageLabel } from "../../src/lib/t212-labels";
@@ -24,6 +25,15 @@ export default function InvestimentosPage() {
     queryKey: ["t212-overview"],
     queryFn: fetchOverview,
     enabled: Boolean(user),
+  });
+
+  // So arranca depois de o overview confirmar "configured": sem chave a rota
+  // do grafico responde 503, e a pagina mostraria um erro em vez do painel
+  // de configuracao.
+  const chart = useQuery({
+    queryKey: ["t212-chart"],
+    queryFn: fetchChart,
+    enabled: Boolean(user) && Boolean(data?.configured),
   });
 
   const sync = useMutation({
@@ -86,6 +96,8 @@ export default function InvestimentosPage() {
             onSync={() => sync.mutate()}
             syncing={sync.isPending}
           />
+
+          <PortfolioChart points={chart.data ?? []} />
 
           {syncError ? (
             <p className="text-xs text-destructive" title={syncError.detail}>

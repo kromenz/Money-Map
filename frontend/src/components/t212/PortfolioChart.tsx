@@ -1,0 +1,76 @@
+"use client";
+
+import { useMemo } from "react";
+import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
+import {
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
+import { chartData } from "@/lib/t212-metrics";
+import type { ChartPoint } from "@/types/t212";
+
+// As cores vivem so aqui: o <ChartStyle> do ui/chart.tsx transforma cada
+// entrada com "color" numa custom property --color-<chave>.
+const config = {
+  invested: { label: "Investido", color: "var(--chart-savings)" },
+  marketValue: { label: "Valor de mercado", color: "var(--chart-income)" },
+} satisfies ChartConfig;
+
+/**
+ * connectNulls fica a false de proposito. Um dia sem snapshot e um dia em que a
+ * app nao correu -- ligar os pontos por cima desenharia uma medicao que nunca
+ * existiu, que e o defeito que a folha de Excel tem na linha Monthly remaining.
+ *
+ * O investido, esse, arrasta-se: e uma funcao em degrau que so muda quando ha
+ * execucao, e o servidor ja o entrega arrastado.
+ */
+export function PortfolioChart({ points }: { points: ChartPoint[] }) {
+  const data = useMemo(() => chartData(points), [points]);
+
+  if (data.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Ainda nao ha historico para desenhar. A primeira sincronizacao traz as
+        ordens todas; o valor de mercado comeca a ser medido a partir de hoje.
+      </p>
+    );
+  }
+
+  return (
+    <ChartContainer config={config} className="h-[280px] w-full">
+      <LineChart data={data} margin={{ left: 8, right: 8 }}>
+        <CartesianGrid vertical={false} />
+        <XAxis
+          dataKey="date"
+          tickLine={false}
+          axisLine={false}
+          minTickGap={32}
+          tickFormatter={(v: string) => v.slice(2, 7)}
+        />
+        <YAxis tickLine={false} axisLine={false} width={64} />
+        <ChartTooltip content={<ChartTooltipContent />} />
+        <ChartLegend content={<ChartLegendContent />} />
+        <Line
+          type="stepAfter"
+          dataKey="invested"
+          stroke="var(--color-invested)"
+          dot={false}
+          strokeWidth={2}
+          connectNulls={false}
+        />
+        <Line
+          type="monotone"
+          dataKey="marketValue"
+          stroke="var(--color-marketValue)"
+          dot={false}
+          strokeWidth={2}
+          connectNulls={false}
+        />
+      </LineChart>
+    </ChartContainer>
+  );
+}
