@@ -72,3 +72,45 @@ describe("planArchive", () => {
     expect(planArchive([], [], new Set())).toEqual({ toArchive: [], toRestore: [] });
   });
 });
+
+describe("planArchive, a terceira condicao (o grupo tem de ser desconhecido)", () => {
+  it("nao arquiva uma categoria nova cujo grupo a folha tem", () => {
+    // O caso verdadeiro que quase deu asneira: o utilizador criou `Dividends`
+    // e `Interest` na folha de 2026. Estao ausentes da de 2025 e ainda sem
+    // transaccoes, porque a ponte so comeca a escrever em Setembro. Com so as
+    // duas primeiras condicoes, importar 2025 arquivava-as -- e o resultado
+    // final dependia da ordem por que as folhas fossem importadas.
+    const existing = [cat("nova", "", "Dividends", false, "income")];
+    // A folha de 2025 tem outras categorias de income, todas sem grupo.
+    const folha2025 = [{ section: "income", group: "", name: "Salario" }];
+
+    expect(planArchive(existing, folha2025, new Set()).toArchive).toEqual([]);
+  });
+
+  it("arquiva quando o grupo e ele proprio desconhecido da folha", () => {
+    // A assinatura das intrusas: "Car Payments" e uma categoria noutro sitio e
+    // nunca foi um grupo, portanto nenhuma folha o vai reclamar.
+    const existing = [cat("intrusa", "Car Payments", "Fuel / Gasoline")];
+    const folha = [{ section: "expenses", group: "Transportation", name: "Fuel / Gasoline" }];
+
+    expect(planArchive(existing, folha, new Set()).toArchive).toEqual(["intrusa"]);
+  });
+
+  it("o grupo conta por seccao -- o mesmo nome em income e expenses e outro grupo", () => {
+    const existing = [cat("x", "Other", "Coisa", false, "income")];
+    // "Other" existe como grupo, mas em expenses.
+    const folha = [{ section: "expenses", group: "Other", name: "Miscellaneous" }];
+
+    expect(planArchive(existing, folha, new Set()).toArchive).toEqual(["x"]);
+  });
+
+  it("um grupo inteiro apagado da folha fica por arquivar -- o lado seguro de errar", () => {
+    // Deixa a categoria a vista em vez de a esconder. Se o utilizador apagou o
+    // grupo de proposito, ve-o na grelha e decide; se foi engano, nao perdeu
+    // nada.
+    const existing = [cat("orfa", "Grupo Que Desapareceu", "Coisa")];
+    const folha = [{ section: "expenses", group: "Home", name: "Rent" }];
+
+    expect(planArchive(existing, folha, new Set()).toArchive).toEqual(["orfa"]);
+  });
+});
