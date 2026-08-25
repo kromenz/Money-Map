@@ -101,4 +101,15 @@ describe("reconcilePlan", () => {
     expect(plan.toDelete).toHaveLength(existing.length);
     expect(plan.toDelete.every((id) => id.startsWith(BRIDGE_PREFIX))).toBe(true);
   });
+
+  it("nunca apaga uma despesa sem o prefixo, mesmo que o chamador passe a lista toda", () => {
+    // Se um dia alguem passar aqui todas as transaccoes em vez de so as da
+    // ponte, a funcao tem de se defender sozinha -- nao pode confiar na
+    // disciplina de quem a chama.
+    const existing = [{ externalId: "manual-1" }];
+    const plan = reconcilePlan(existing, []);
+
+    expect(plan.toDelete).not.toContain("manual-1");
+    expect(plan.toDelete).toEqual([]);
+  });
 });

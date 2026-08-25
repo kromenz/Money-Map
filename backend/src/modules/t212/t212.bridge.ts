@@ -47,6 +47,10 @@ export const CATEGORIES = {
   interest: { section: "income" as const, group: "", name: "Interest" },
 };
 
+// As datas comparam-se em referencial UTC: day() fatia o ISO sem passar por
+// getters locais, e derivedCutoff() espera um { year, month } ja calculado em
+// UTC por quem chama. Um dos dois lados a usar hora local desalinha o corte
+// perto da meia-noite.
 function day(iso: string): string {
   return iso.slice(0, 10);
 }
@@ -121,13 +125,18 @@ export function reconcilePlan(
   existing: { externalId: string }[],
   desired: BridgeRow[]
 ): { toDelete: string[]; toCreate: BridgeRow[] } {
+  // A funcao nunca pode apagar o que nao foi ela a criar, seja qual for a
+  // lista que lhe passarem -- a garantia nao pode depender da disciplina de
+  // quem chama.
+  const existingBridgeIds = existing
+    .map((e) => e.externalId)
+    .filter((id) => id.startsWith(BRIDGE_PREFIX));
+
   const desiredIds = new Set(desired.map((d) => d.externalId));
-  const existingIds = new Set(existing.map((e) => e.externalId));
+  const existingIds = new Set(existingBridgeIds);
 
   return {
-    toDelete: existing
-      .map((e) => e.externalId)
-      .filter((id) => !desiredIds.has(id)),
+    toDelete: existingBridgeIds.filter((id) => !desiredIds.has(id)),
     toCreate: desired.filter((d) => !existingIds.has(d.externalId)),
   };
 }
