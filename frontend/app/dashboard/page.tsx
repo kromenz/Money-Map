@@ -18,6 +18,7 @@ import { DashboardSkeleton } from "../../src/components/dashboard/DashboardSkele
 import { FolderScanNotice } from "../../src/components/dashboard/FolderScanNotice";
 import { AddExpenseBar } from "../../src/components/dashboard/AddExpenseBar";
 import { PendingNotice } from "../../src/components/dashboard/PendingNotice";
+import { InvestmentsOverview } from "../../src/components/dashboard/InvestmentsOverview";
 import { fetchGrid } from "../../src/services/budget.service";
 import { scanFolder } from "../../src/services/folder-scan.service";
 import { flushPending } from "../../src/services/expense.service";
@@ -334,6 +335,11 @@ export default function DashboardPage() {
       {report && <ImportReport result={report} />}
 
       {renderContent()}
+
+      {/* Fora do renderContent de proposito: a corretora nao depende do estado
+          do orcamento, e um ano sem movimento ou uma falha a ler a grelha nao
+          sao motivo para o resumo dos investimentos desaparecer. */}
+      <InvestmentsOverview />
 
       <details className="rounded-lg border p-4">
         <summary className="cursor-pointer text-sm font-medium">
