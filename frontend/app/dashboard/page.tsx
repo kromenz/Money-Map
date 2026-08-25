@@ -307,6 +307,15 @@ export default function DashboardPage() {
           />
         </div>
 
+        {/* A seguir ao "Where it went this year" e antes do detalhe do mes: o
+            ano inteiro primeiro, depois o mes em foco. Estava no fim da pagina.
+
+            Isto poe o cartao dentro do ramo do caminho feliz, portanto ele
+            desaparece num ano sem movimento ou numa falha a ler a grelha. O
+            preco de o ter aqui; a ligacao "Investments" do cabecalho continua
+            la nesses casos. */}
+        <InvestmentsOverview />
+
         <MonthPanel
           detail={detail}
           monthLabel={MONTH_LABELS[detail.month]}
@@ -368,11 +377,6 @@ export default function DashboardPage() {
       {report && <ImportReport result={report} />}
 
       {renderContent()}
-
-      {/* Fora do renderContent de proposito: a corretora nao depende do estado
-          do orcamento, e um ano sem movimento ou uma falha a ler a grelha nao
-          sao motivo para o resumo dos investimentos desaparecer. */}
-      <InvestmentsOverview />
 
       <details className="rounded-lg border p-4">
         <summary className="cursor-pointer text-sm font-medium">
