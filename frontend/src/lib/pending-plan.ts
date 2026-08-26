@@ -34,6 +34,8 @@ export function groupPendingByYear(pending: PendingExpense[]): YearBatch[] {
       name: p.name,
       month: p.month,
       amount: Number(p.amount),
+      // null na fila e "sem etiqueta"; o applyExpenses espera undefined.
+      note: p.note ?? undefined,
     });
   }
 

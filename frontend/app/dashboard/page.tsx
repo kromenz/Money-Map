@@ -8,6 +8,7 @@ import { BudgetGrid } from "../../src/components/BudgetGrid";
 import { ImportWorkbook } from "../../src/components/ImportWorkbook";
 import { ImportReport } from "../../src/components/ImportReport";
 import { ThemeToggle } from "../../src/components/ThemeToggle";
+import { ValuesToggle } from "../../src/components/ValuesToggle";
 import { YearPills } from "../../src/components/YearPills";
 import { YearSummary } from "../../src/components/dashboard/YearSummary";
 import { CashflowChart } from "../../src/components/dashboard/CashflowChart";
@@ -16,11 +17,12 @@ import { GroupComposition } from "../../src/components/dashboard/GroupCompositio
 import { yearGroups } from "../../src/lib/year-comparison";
 import { DashboardSkeleton } from "../../src/components/dashboard/DashboardSkeleton";
 import { FolderScanNotice } from "../../src/components/dashboard/FolderScanNotice";
-import { AddExpenseBar } from "../../src/components/dashboard/AddExpenseBar";
+import { AddEntryBar } from "../../src/components/dashboard/AddEntryBar";
 import { PendingNotice } from "../../src/components/dashboard/PendingNotice";
 import { fetchGrid } from "../../src/services/budget.service";
 import { scanFolder } from "../../src/services/folder-scan.service";
 import { flushPending } from "../../src/services/expense.service";
+import { flushBridge } from "../../src/services/bridge.service";
 import { yearMetrics, monthDetail } from "../../src/lib/budget-metrics";
 import { categoryDeltas } from "../../src/lib/category-deltas";
 import { MONTH_LABELS } from "../../src/lib/format";
@@ -76,8 +78,39 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!data || scanned.current) return;
     scanned.current = true;
-    void runScan(false).then(() => applyPending());
+    void runScan(false)
+      .then(() => applyPending())
+      // A ponte por ultimo, e a seguir ao varrimento: e o varrimento que
+      // importa a folha e faz o corte avancar, e correr a ponte antes disso
+      // era escrever na folha meses que ela ja passou a cobrir.
+      .then(() => applyBridge());
   }, [data]);
+
+  /**
+   * Descarrega na folha o que a ponte do Trading 212 ainda lhe deve.
+   *
+   * Silencioso de proposito, ao contrario do applyPending: os gastos pendentes
+   * sao do utilizador e ele espera ve-los aparecer; isto e trabalho de fundo de
+   * uma integracao que pode nem estar configurada. O que ficar por escrever
+   * continua em divida no servidor e volta a ser tentado -- nada se perde por
+   * nao ser dito aqui.
+   */
+  async function applyBridge() {
+    try {
+      const result = await flushBridge();
+      if (result.written > 0) {
+        await queryClient.invalidateQueries({ queryKey: ["budget-grid"] });
+      }
+      // A folha ficou escrita mas o servidor nao soube: a proxima corrida
+      // escreveria os mesmos valores outra vez. E o unico desfecho aqui que o
+      // utilizador tem mesmo de ver.
+      for (const failure of result.failures) {
+        console.warn(`[bridge] ${failure.year}: ${failure.reason}`);
+      }
+    } catch (err) {
+      console.error("bridge flush failed", err);
+    }
+  }
 
   // Aplicar a fila reescreve o ficheiro e reimporta, por isso a grelha tem de
   // ser reposta a zero -- e o mesmo motivo por que registar um gasto a invalida.
@@ -170,11 +203,11 @@ export default function DashboardPage() {
 
     if (isPending) return <DashboardSkeleton />;
 
-    // PendingNotice e AddExpenseBar acima de todos os ramos que se seguem: a
+    // PendingNotice e AddEntryBar acima de todos os ramos que se seguem: a
     // fila de pendentes nao depende do ano em vista, e num ano com categorias
     // mas sem movimento -- o caso de Janeiro de qualquer ano -- o utilizador
-    // tem de conseguir registar o primeiro gasto do ano mesmo assim.
-    // AddExpenseBar ja se esconde sozinho sem categorias de despesa (rows
+    // tem de conseguir registar o primeiro lancamento do ano mesmo assim.
+    // AddEntryBar ja se esconde sozinho sem categorias nenhumas (rows
     // vazio inclusive), por isso passar data?.rows tal e qual e seguro mesmo
     // nos ramos de erro e vazio.
     const bar = (
@@ -185,7 +218,7 @@ export default function DashboardPage() {
           onApply={applyPending}
           failures={pendingFailures}
         />
-        <AddExpenseBar
+        <AddEntryBar
           year={year}
           rows={data?.rows ?? []}
           onWritten={() => {
@@ -279,6 +312,7 @@ export default function DashboardPage() {
           monthLabel={MONTH_LABELS[detail.month]}
           averages={metrics.averages}
           deltas={deltas}
+          year={year}
         />
       </div>
     );
@@ -308,6 +342,9 @@ export default function DashboardPage() {
             className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted">
             Compare years
           </Link>
+          <Link href="/investments" className="text-sm text-muted-foreground hover:text-foreground">
+            Investments
+          </Link>
           <YearPills
             year={year}
             onSelect={(y) => {
@@ -319,6 +356,7 @@ export default function DashboardPage() {
               setReport(null);
             }}
           />
+          <ValuesToggle />
           <ThemeToggle />
         </div>
       </header>

@@ -21,7 +21,10 @@ export function eurTooltipFormatter(
   config: ChartConfig,
   // As series desenhadas abaixo do zero chegam negativas. Quem as desenha passa
   // Math.abs para o tooltip nao herdar o sinal do desenho.
-  transform: (n: number) => number = (n) => n
+  transform: (n: number) => number = (n) => n,
+  // Com os valores tapados o tooltip tapa-os tambem: a forma da linha ja se ve
+  // no grafico, e era pelo hover que os montantes voltavam ao ecra.
+  hidden = false
 ) {
   return (value: unknown, name: unknown, item: unknown) => {
     const key = String(name);
@@ -43,7 +46,7 @@ export function eurTooltipFormatter(
             {config[key]?.label ?? key}
           </span>
           <span className="font-mono font-medium tabular-nums text-foreground">
-            {formatEur(transform(Number(value)))}
+            {formatEur(transform(Number(value)), hidden)}
           </span>
         </div>
       </>

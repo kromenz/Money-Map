@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import useRequireAuth from "../../src/hooks/useRequireAuth";
 import { ThemeToggle } from "../../src/components/ThemeToggle";
+import { ValuesToggle } from "../../src/components/ValuesToggle";
 import { Skeleton } from "../../src/components/ui/skeleton";
 import { YearTotalsChart } from "../../src/components/dashboard/YearTotalsChart";
 import { CumulativeChart } from "../../src/components/dashboard/CumulativeChart";
@@ -152,6 +153,7 @@ export default function YearsPage() {
           <Link href="/dashboard" className="text-sm underline-offset-4 hover:underline">
             Back to dashboard
           </Link>
+          <ValuesToggle />
           <ThemeToggle />
         </div>
       </header>

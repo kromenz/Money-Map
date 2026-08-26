@@ -446,3 +446,94 @@ describe("applyExpenses, fixture 2025 (celulas de placeholder \"-\")", () => {
     expect(find(after)).toBeCloseTo(5, 2);
   });
 });
+
+/**
+ * A escrita da ponte do Trading 212 contra a folha verdadeira.
+ *
+ * Estes casos existem por duas razoes registadas antes de haver codigo: o
+ * mecanismo foi construido so para despesas e nunca tinha sido exercido em
+ * `savings` nem em `income`, e a ponte escreve nas duas; e as etiquetas N()
+ * eram uma aposta sobre o que o parser aceita a ler de volta.
+ */
+describe("applyExpenses, o que a ponte escreve", () => {
+  async function categoryIn(section: "income" | "savings") {
+    const parsed = await parseBudgetWorkbook(Buffer.from(bytes()), 2026);
+    const c = parsed.categories.find((x) => x.section === section);
+    if (!c) throw new Error(`a fixture nao tem nenhuma categoria de ${section}`);
+    return c;
+  }
+
+  it("escreve numa categoria de savings, que so a ponte usa", async () => {
+    const target = await categoryIn("savings");
+    const after = await applyExpenses(bytes(), [
+      { ...target, month: 9, amount: 500, note: "Trading 212 2026-09-03" },
+    ]);
+
+    const parsed = await parseBudgetWorkbook(Buffer.from(after), 2026);
+    const row = parsed.categories.find(
+      (c) => c.section === "savings" && c.group === target.group && c.name === target.name
+    );
+    expect(row).toBeTruthy();
+  });
+
+  it("escreve numa categoria de income, que so a ponte usa", async () => {
+    const target = await categoryIn("income");
+    const after = await applyExpenses(bytes(), [
+      { ...target, month: 9, amount: 1.31, note: "AAPL_US_EQ 2026-09-15" },
+    ]);
+
+    const parsed = await parseBudgetWorkbook(Buffer.from(after), 2026);
+    expect(parsed.categories.some((c) => c.section === "income")).toBe(true);
+  });
+
+  it("a etiqueta fica na formula da celula", async () => {
+    const target = await categoryIn("income");
+    const after = unzipSync(
+      await applyExpenses(bytes(), [
+        { ...target, month: 9, amount: 1.31, note: "AAPL_US_EQ 2026-09-15" },
+      ])
+    );
+
+    const sheet = Buffer.from(after["xl/worksheets/sheet1.xml"]).toString("utf8");
+    expect(sheet).toContain('N("AAPL_US_EQ 2026-09-15")');
+  });
+
+  it("a etiqueta nao mexe no valor que o parser le de volta", async () => {
+    // O N() de texto vale zero. Se o parser lesse outra coisa, a importacao
+    // seguinte reprovava nos totais e revertia -- e a folha do utilizador
+    // ficava com etiquetas que nunca mais conseguia importar.
+    const target = await categoryIn("income");
+
+    const semNota = await parseBudgetWorkbook(
+      Buffer.from(await applyExpenses(bytes(), [{ ...target, month: 9, amount: 1.31 }])),
+      2026
+    );
+    const comNota = await parseBudgetWorkbook(
+      Buffer.from(
+        await applyExpenses(bytes(), [
+          { ...target, month: 9, amount: 1.31, note: "AAPL_US_EQ 2026-09-15" },
+        ])
+      ),
+      2026
+    );
+
+    expect(comNota.checksums).toEqual(semNota.checksums);
+  });
+
+  it("uma categoria que a folha nao tem diz qual e, pelo nome", async () => {
+    // O caso mais provavel de todos: a folha do utilizador nunca teve
+    // investimentos, portanto nao tem a linha "Trading 212". A mensagem tem de
+    // dizer que linha criar -- e a unica falha aqui que ele consegue resolver.
+    const missing = {
+      section: "savings" as const,
+      group: "",
+      name: "Trading 212",
+      month: 9,
+      amount: 500,
+    };
+
+    await expect(applyExpenses(bytes(), [missing])).rejects.toMatchObject({
+      missing: { section: "savings", group: "", name: "Trading 212" },
+    });
+  });
+});

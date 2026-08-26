@@ -18,7 +18,35 @@ export type Edit = {
    * `value`   -- linha de subtotal: so o valor em cache, a formula fica intacta.
    */
   mode: "formula" | "value";
+  /**
+   * Etiqueta a acompanhar esta parcela dentro da formula, em modo `formula`.
+   *
+   * Sem ela a celula fica com numeros anonimos: `=12,5+1,31+499,99` nao diz
+   * qual daqueles foi a PS5 e qual foi o dividendo. Vai logo a seguir ao valor
+   * que descreve, como `N("PS5")` -- o N() de texto vale zero em Excel e em
+   * LibreOffice, portanto a soma da celula nao muda.
+   *
+   * Ignorada em modo `value`: essa so mexe no valor em cache de um subtotal e
+   * nao tem formula onde a escrever.
+   */
+  note?: string;
 };
+
+/**
+ * Texto para dentro de uma string de formula, ja seguro para o XML.
+ *
+ * Duas escapagens sobrepostas, e as duas sao precisas: as aspas duplicam-se
+ * porque e assim que uma string de Excel as leva, e o &<> escapam-se porque o
+ * <f> e um no de texto XML. Uma nota com um & partia o zip inteiro.
+ */
+function quoteNote(note: string): string {
+  const escaped = note
+    .replace(/"/g, '""')
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  return `N("${escaped}")`;
+}
 
 function splitRef(ref: string): { column: string; row: number } {
   const m = /^([A-Z]+)(\d+)$/.exec(ref);
@@ -131,7 +159,7 @@ function openTag(cell: string): string {
  * Reconstruir em vez de remendar: o `<f>` tem de vir antes do `<v>`, e os tres
  * casos -- com formula, so com valor, e vazia -- convergem todos nesta forma.
  */
-function editFormulaCell(cell: string, delta: number): string {
+function editFormulaCell(cell: string, delta: number, note?: string): string {
   if (/<f[^>]*\bt="shared"/.test(cell)) {
     throw new SheetWriteError(
       "Celula com formula partilhada: nao e uma celula de categoria"
@@ -151,12 +179,19 @@ function editFormulaCell(cell: string, delta: number): string {
   // Anexar a uma expressao aritmetica completa e sempre correcto, incluindo
   // -(a+b): o menos unario aplica-se ao grupo entre parenteses e nao ao que vem
   // a seguir.
-  const body = formula
-    ? `${formula[1]}+${delta}`
-    : hasValue
-      ? `${String(clean(current))}+${delta}`
-      : String(delta);
+  // A etiqueta vem LOGO A SEGUIR ao valor que descreve, e nao no fim da
+  // formula: le-se "valor, e o que ele foi", e cada N() fica colado ao numero
+  // a que pertence quando a celula tem varias parcelas.
+  const parcel = note ? `${delta}+${quoteNote(note)}` : String(delta);
 
+  const body = formula
+    ? `${formula[1]}+${parcel}`
+    : hasValue
+      ? `${String(clean(current))}+${parcel}`
+      : parcel;
+
+  // O valor em cache ignora a etiqueta de proposito: N() de texto vale zero,
+  // portanto a soma da celula e a mesma com ela ou sem ela.
   return `${openTag(cell)}<f>${body}</f><v>${clean(current + delta)}</v></c>`;
 }
 
@@ -215,7 +250,7 @@ export function applyEdits(sheetXml: string, edits: Edit[]): string {
     const cell = cellMatch[0];
     const updated =
       edit.mode === "formula"
-        ? editFormulaCell(cell, edit.delta)
+        ? editFormulaCell(cell, edit.delta, edit.note)
         : withValue(cell, cachedValue(cell) + edit.delta);
 
     // Funcao de substituicao, nao string: "cell" e "updated" podem conter

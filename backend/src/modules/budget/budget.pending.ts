@@ -9,6 +9,7 @@ export type PendingRow = {
   group: string;
   name: string;
   amount: Prisma.Decimal;
+  note: string | null;
 };
 
 export type PendingResponse = Omit<PendingRow, "amount"> & { amount: string };
@@ -21,6 +22,7 @@ const SELECT = {
   group: true,
   name: true,
   amount: true,
+  note: true,
 } as const;
 
 /** Decimal nao sobrevive ao JSON. Dinheiro sai em string, como no resto da API. */
@@ -37,6 +39,7 @@ export async function addPending(
     group: string;
     name: string;
     amount: string;
+    note?: string;
   }
 ): Promise<{ id: string }> {
   const row = await prisma.pendingExpense.create({

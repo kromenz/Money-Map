@@ -4,8 +4,21 @@ import type { Section, SheetTarget } from "@/types/expense";
 /**
  * O alvo nao existe na folha. Distinto de um erro interno: a culpa e do pedido,
  * e a resposta ao browser e 400 e nao 500.
+ *
+ * O `missing` diz QUAL a categoria em falta, quando ha uma. Sem ele, quem
+ * apanha o erro so sabe que "alguma" falhou -- e a escrita da ponte manda
+ * categorias que o utilizador nunca pos na folha (Trading 212, Dividends,
+ * Interest), portanto essa e a falha mais provavel e a que mais precisa de
+ * ser dita pelo nome.
  */
-export class SheetTargetError extends Error {}
+export class SheetTargetError extends Error {
+  readonly missing?: { section: Section; group: string; name: string };
+
+  constructor(message: string, missing?: { section: Section; group: string; name: string }) {
+    super(message);
+    this.missing = missing;
+  }
+}
 
 export type CellTargets = {
   /** Ex.: "H26". */
@@ -168,7 +181,8 @@ export async function locateCells(
 
   if (cellRow === null) {
     throw new SheetTargetError(
-      `A folha nao tem ${target.section}/${target.group}/${target.name}`
+      `A folha nao tem ${target.section}/${target.group}/${target.name}`,
+      { section: target.section, group: target.group, name: target.name }
     );
   }
 

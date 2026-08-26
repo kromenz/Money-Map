@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { MONTH_LABELS, formatAmount, formatEur, formatPercent } from "./format";
+import {
+  HIDDEN,
+  MONTH_LABELS,
+  formatAmount,
+  formatEur,
+  formatPercent,
+} from "./format";
 
 describe("MONTH_LABELS", () => {
   it("tem 12 meses de JAN a DEC", () => {
@@ -44,5 +50,28 @@ describe("formatPercent", () => {
 
   it("devolve travessao quando o valor e nulo", () => {
     expect(formatPercent(null)).toBe("—");
+  });
+});
+
+describe("valores escondidos", () => {
+  it("o formatEur tapa o montante", () => {
+    expect(formatEur(1234.5, true)).toBe(HIDDEN);
+  });
+
+  it("o formatEur tapa tambem os negativos, sem deixar escapar o sinal", () => {
+    expect(formatEur(-42, true)).toBe(HIDDEN);
+  });
+
+  it("o formatAmount tapa o montante", () => {
+    expect(formatAmount(1234.5, true)).toBe(HIDDEN);
+  });
+
+  it("nao tapa nada quando a bandeira e falsa", () => {
+    expect(formatEur(8, false)).toBe("€8.00");
+    expect(formatAmount(8, false)).toBe("8.00");
+  });
+
+  it("a percentagem sobrevive -- e para isso que a opcao existe", () => {
+    expect(formatPercent(0.199)).toBe("19.9%");
   });
 });

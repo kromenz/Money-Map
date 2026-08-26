@@ -6,10 +6,12 @@ import {
   gridQuerySchema,
   pendingBodySchema,
   clearBodySchema,
+  parcelsQuerySchema,
 } from "./budget.schemas";
 import { buildGrid } from "./budget.grid";
 import { WorkbookFormatError } from "./budget.parser";
 import { addPending, listPending, clearPending } from "./budget.pending";
+import { getMonthParcels } from "./budget.parcels.query";
 
 export const importWorkbook: RequestHandler = async (req, res, next) => {
   try {
@@ -146,6 +148,39 @@ export const clearPendingHandler: RequestHandler = async (req, res, next) => {
 
     const cleared = await clearPending((req as any).userId, parsed.data.ids);
     res.json({ cleared });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * O que foi comprado num mes, por categoria.
+ *
+ * Uma rota por mes e nao pelo ano inteiro: e assim que a pagina pergunta -- o
+ * utilizador escolhe o mes e ve aquele. Trazer os doze de uma vez era mandar
+ * pela rede um ano de detalhe para mostrar um mes.
+ */
+export const getParcels: RequestHandler = async (req, res, next) => {
+  try {
+    const parsed = parcelsQuerySchema.safeParse({
+      year: req.query.year,
+      month: req.query.month,
+    });
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Ano ou mes invalido",
+        issues: parsed.error.issues.map((i) => i.message),
+      });
+      return;
+    }
+
+    res.json(
+      await getMonthParcels(
+        (req as any).userId,
+        parsed.data.year,
+        parsed.data.month
+      )
+    );
   } catch (err) {
     next(err);
   }

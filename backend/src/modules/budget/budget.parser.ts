@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { toStored } from "./budget.grid";
 
 export type Section = "income" | "savings" | "expenses";
 
@@ -15,6 +16,12 @@ export type ParsedCell = {
   name: string;
   month: number;
   sheetValue: number;
+  /**
+   * A formula crua da celula, quando ela e uma formula. E aqui que vivem as
+   * parcelas -- `=42.88+11.39` sao duas compras, e o valor em cache sozinho
+   * ja as perdeu. null quando a celula tem um numero escrito a mao.
+   */
+  formula: string | null;
 };
 
 export type MonthlyTotals = {
@@ -50,6 +57,18 @@ const SECTION_END_LABEL = "Monthly Totals";
  * As celulas com dados sao quase todas formulas (=42.88+11.39). O exceljs
  * devolve {formula, result} nesses casos, e o numero cru nos outros.
  */
+function formulaOf(cell: ExcelJS.Cell): string | null {
+  const v = cell.value;
+  if (v && typeof v === "object") {
+    const formula = (v as { formula?: unknown }).formula;
+    if (typeof formula === "string") return formula;
+    // Uma celula que partilha a formula de outra traz sharedFormula em vez de
+    // formula. Nao interessa aqui: as celulas de categoria nunca sao
+    // partilhadas, e uma formula partilhada nao e uma soma de compras.
+  }
+  return null;
+}
+
 function numericValue(cell: ExcelJS.Cell): number | null {
   const v = cell.value;
   if (typeof v === "number") return v;
@@ -89,14 +108,28 @@ function findHeaderRow(ws: ExcelJS.Worksheet): number {
   );
 }
 
+/**
+ * A regra de sinal nao vive aqui -- vive no toStored do budget.grid.ts, que e a
+ * fonte unica da convencao de armazenamento. Esta funcao continua exportada
+ * porque o import usa-a com o `Section` do parser, mas nao decide nada.
+ */
 export function signedAmount(section: Section, sheetValue: number): number {
-  return section === "income" ? sheetValue : -sheetValue;
+  return toStored(section, sheetValue);
 }
 
 function monthValues(ws: ExcelJS.Worksheet, row: number): (number | null)[] {
   const out: (number | null)[] = [];
   for (let c = FIRST_MONTH_COL; c <= LAST_MONTH_COL; c += 1) {
     out.push(numericValue(ws.getCell(row, c)));
+  }
+  return out;
+}
+
+/** As formulas dos doze meses da linha, alinhadas com o monthValues. */
+function monthFormulas(ws: ExcelJS.Worksheet, row: number): (string | null)[] {
+  const out: (string | null)[] = [];
+  for (let c = FIRST_MONTH_COL; c <= LAST_MONTH_COL; c += 1) {
+    out.push(formulaOf(ws.getCell(row, c)));
   }
   return out;
 }
@@ -142,6 +175,7 @@ export async function parseBudgetWorkbook(
   for (let r = headerRow + 1; r <= ws.rowCount; r += 1) {
     const label = textValue(ws.getCell(r, LABEL_COL));
     const months = monthValues(ws, r);
+    const formulas = monthFormulas(ws, r);
     const hasMonths = months.some((v) => v !== null);
 
     const maybeSection = SECTION_LABELS[label];
@@ -197,6 +231,7 @@ export async function parseBudgetWorkbook(
         name: label,
         month: i + 1,
         sheetValue: value,
+        formula: formulas[i],
       });
     });
   }

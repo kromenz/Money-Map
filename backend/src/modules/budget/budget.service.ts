@@ -5,9 +5,34 @@ import {
   signedAmount,
   type ParsedWorkbook,
 } from "./budget.parser";
+import { cellParcels } from "./budget.parcels";
+import { planArchive } from "./budget.archive";
 import { compareScope } from "./budget.verify";
 import type { MonthComparison, StructureReport } from "./budget.verify";
 import { diffCells, type DiffCell, type WorkbookDiff } from "./budget.diff";
+import { toDisplay } from "./budget.grid";
+import { runBridge } from "../t212/t212.bridge";
+import { loadT212Config } from "../t212/t212.config";
+import { prismaRepo } from "../t212/t212.repo";
+
+/**
+ * O que a reconciliacao da ponte fez a seguir a este import.
+ *
+ * Viaja no ImportResult porque e o import que faz o corte avancar, e portanto e
+ * o import que faz as linhas da ponte desaparecerem da grelha. Sem isto, a
+ * pessoa importava a folha, via a grelha encolher, e nao havia mensagem em lado
+ * nenhum -- o `deleted` so aparecia no relatorio da sincronizacao, que e o
+ * outro caminho.
+ */
+export type BridgeReconcile = {
+  created: number;
+  deleted: number;
+  /**
+   * Preenchido so quando a reconciliacao falhou. A importacao passou na mesma
+   * -- ver reconcileBridgeAfterImport -- mas isso tem de ser visivel.
+   */
+  error?: string;
+};
 
 export type ImportResult = {
   year: number;
@@ -16,6 +41,7 @@ export type ImportResult = {
   comparisons: MonthComparison[];
   structure: StructureReport;
   allMatch: boolean;
+  bridge: BridgeReconcile;
 };
 
 /**
@@ -63,20 +89,73 @@ export async function importBudgetWorkbook(
 ): Promise<ImportResult> {
   const parsed = await parseBudgetWorkbook(buffer, year);
 
+  let result: ImportResult;
   try {
-    return await prisma.$transaction(
+    result = await prisma.$transaction(
       async (tx) => {
-        const result = await writeAndVerify(tx, userId, parsed, year);
-        if (!result.allMatch) throw new ImportMismatch(result);
-        return result;
+        const written = await writeAndVerify(tx, userId, parsed, year);
+        if (!written.allMatch) throw new ImportMismatch(written);
+        return written;
       },
       // Por omissao o Prisma corta aos 5s. O import faz poucas queries mas
       // algumas mexem em centenas de linhas.
       { timeout: 30_000, maxWait: 10_000 }
     );
   } catch (err) {
+    // A importacao reverteu: o corte nao mudou, e nao ha nada a reconciliar.
     if (err instanceof ImportMismatch) return err.result;
     throw err;
+  }
+
+  result.bridge = await reconcileBridgeAfterImport(userId);
+  return result;
+}
+
+/**
+ * O corte da ponte deriva do ultimo mes com transacoes vindas do Excel, e quem
+ * faz esse maximo avancar e precisamente esta importacao -- mas a reconciliacao
+ * so corria dentro do syncAll.
+ *
+ * Sem isto, no instante em que a folha passa a cobrir Outubro a grelha de
+ * Outubro mostra a transferencia da folha E o deposito que a ponte criou antes:
+ * a poupanca do mes fica inflacionada ate a proxima sincronizacao, que pode ser
+ * so quando a pessoa voltar a abrir a app.
+ *
+ * E tudo leitura e escrita local, sem rede. Uma falha aqui nao pode reverter
+ * nem partir a importacao, que ja esta confirmada e verificada ao centimo -- e
+ * por isso que o erro so se regista: o pior caso passa a ser o comportamento
+ * que havia antes, com a proxima sincronizacao a reconciliar.
+ */
+async function reconcileBridgeAfterImport(
+  userId: string
+): Promise<BridgeReconcile> {
+  return bridgeOutcome(() =>
+    runBridge(userId, prismaRepo, loadT212Config().bridgeFrom)
+  );
+}
+
+/**
+ * A parte da reconciliacao que nao toca na base: correr, e transformar o
+ * desfecho em algo que o relatorio consegue mostrar.
+ *
+ * Separada para ser testavel -- o importBudgetWorkbook precisa de uma folha
+ * verdadeira e de um Postgres, e a regra que interessa aqui (o numero de
+ * apagados chega ao relatorio; uma falha aparece sem derrubar o import) nao
+ * precisa de nenhum dos dois.
+ */
+export async function bridgeOutcome(
+  run: () => Promise<{ created: number; deleted: number }>
+): Promise<BridgeReconcile> {
+  try {
+    const { created, deleted } = await run();
+    return { created, deleted };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(
+      "[budget] import feito, mas a reconciliacao da ponte T212 falhou",
+      err
+    );
+    return { created: 0, deleted: 0, error: message };
   }
 }
 
@@ -107,6 +186,45 @@ async function writeAndVerify(
     });
     const after = await tx.category.findMany({ where: { userId } });
     for (const c of after) categoryIds.set(categoryKey(c), c.id);
+  }
+
+  // 1b. Arquivar o que a folha ja nao tem.
+  //
+  // A importacao so sabia criar. Uma folha reimportada depois de o parser
+  // mudar de ideias sobre o que e um grupo deixava as categorias antigas para
+  // tras, e elas ficavam para sempre na grelha e na lista de escolha -- foi
+  // assim que apareceram grupos como "Car Payments" ou "Prescriptions", que
+  // sao categorias e nunca foram grupos.
+  const all = await tx.category.findMany({
+    where: { userId },
+    select: { id: true, section: true, group: true, name: true, archived: true },
+  });
+
+  // Quais e que tem transaccoes, de qualquer ano e de qualquer origem. Uma so
+  // consulta em vez de uma por categoria: sao dezenas de categorias, e a
+  // transaccao interactiva tem tempo contado.
+  const used = await tx.transaction.findMany({
+    where: { userId, categoryId: { in: all.map((c) => c.id) } },
+    select: { categoryId: true },
+    distinct: ["categoryId"],
+  });
+  const idsWithTransactions = new Set(
+    used.map((u) => u.categoryId).filter((id): id is string => id !== null)
+  );
+
+  const archive = planArchive(all, parsed.categories, idsWithTransactions);
+
+  if (archive.toArchive.length > 0) {
+    await tx.category.updateMany({
+      where: { userId, id: { in: archive.toArchive } },
+      data: { archived: true },
+    });
+  }
+  if (archive.toRestore.length > 0) {
+    await tx.category.updateMany({
+      where: { userId, id: { in: archive.toRestore } },
+      data: { archived: false },
+    });
   }
 
   // 2. Transacoes: apagar o ambito e reescrever.
@@ -141,6 +259,45 @@ async function writeAndVerify(
 
   if (rows.length > 0) await tx.transaction.createMany({ data: rows });
 
+  // 2b. Parcelas: o detalhe de dentro de cada celula.
+  //
+  // Espelho do ambito, como as transacoes -- apagar primeiro, reescrever
+  // depois. Uma celula que o utilizador simplifique no Excel tem de perder as
+  // parcelas antigas, senao a lista de compras passa a descrever um mes que ja
+  // nao existe.
+  //
+  // Corre DEPOIS das transacoes e nao no lugar delas: a verificacao ao
+  // centimo do passo 3 e sobre as transacoes, e nada aqui lhe pode mexer.
+  await tx.sheetParcel.deleteMany({ where: { userId, year } });
+
+  const parcelRows = parsed.cells.flatMap((cell) => {
+    const categoryId = categoryIds.get(categoryKey(cell));
+    if (!categoryId) return [];
+
+    // cellParcels e nao parseParcels: uma celula que nao se consegue desmontar
+    // conta como uma parcela do seu proprio valor. A soma bate sempre com o
+    // que a grelha mostra, e nenhuma categoria com valor desaparece da lista.
+    const parcels = cellParcels(cell.formula, cell.sheetValue);
+
+    return parcels.map((parcel, i) => ({
+      userId,
+      categoryId,
+      year,
+      month: cell.month,
+      seq: i,
+      // Mesma convencao da Transaction: a soma das parcelas de uma celula da
+      // o amount da transaccao desse mes.
+      amount: new Prisma.Decimal(
+        signedAmount(cell.section, parcel.value).toFixed(2)
+      ),
+      note: parcel.note,
+    }));
+  });
+
+  if (parcelRows.length > 0) {
+    await tx.sheetParcel.createMany({ data: parcelRows });
+  }
+
   // 3. Ler de volta o que ficou gravado e comparar com o que a folha declara.
   //    Dentro da transacao isto ve as escritas por confirmar, portanto continua
   //    a ser verificacao de ida-e-volta e nao uma comparacao em memoria.
@@ -161,8 +318,7 @@ async function writeAndVerify(
     if (!t.category) continue;
     const month = t.date.getUTCMonth();
     // Desfaz a inversao de sinal, para comparar na convencao da folha.
-    const value =
-      t.category.section === "income" ? t.amount : t.amount.negated();
+    const value = toDisplay(t.category.section, t.amount);
 
     const sKey = t.category.section;
     if (!sectionTotals.has(sKey)) sectionTotals.set(sKey, zeros());
@@ -214,6 +370,9 @@ async function writeAndVerify(
       comparisonsSkipped: skipped,
     },
     allMatch: comparisons.length > 0 && comparisons.every((c) => c.ok),
+    // Preenchido a seguir a transacao, pelo importBudgetWorkbook. Um import que
+    // reverta nunca mexeu no corte, portanto fica mesmo em zeros.
+    bridge: { created: 0, deleted: 0 },
   };
 }
 
@@ -259,7 +418,7 @@ export async function previewBudgetWorkbook(
         name: t.category.name,
         month: t.date.getUTCMonth() + 1,
         // Desfaz a inversao de sinal, para comparar na convencao da folha.
-        value: t.category.section === "income" ? t.amount : t.amount.negated(),
+        value: toDisplay(t.category.section, t.amount),
       },
     ];
   });
