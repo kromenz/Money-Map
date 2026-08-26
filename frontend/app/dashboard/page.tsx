@@ -17,7 +17,7 @@ import { GroupComposition } from "../../src/components/dashboard/GroupCompositio
 import { yearGroups } from "../../src/lib/year-comparison";
 import { DashboardSkeleton } from "../../src/components/dashboard/DashboardSkeleton";
 import { FolderScanNotice } from "../../src/components/dashboard/FolderScanNotice";
-import { AddExpenseBar } from "../../src/components/dashboard/AddExpenseBar";
+import { AddEntryBar } from "../../src/components/dashboard/AddEntryBar";
 import { PendingNotice } from "../../src/components/dashboard/PendingNotice";
 import { fetchGrid } from "../../src/services/budget.service";
 import { scanFolder } from "../../src/services/folder-scan.service";
@@ -203,11 +203,11 @@ export default function DashboardPage() {
 
     if (isPending) return <DashboardSkeleton />;
 
-    // PendingNotice e AddExpenseBar acima de todos os ramos que se seguem: a
+    // PendingNotice e AddEntryBar acima de todos os ramos que se seguem: a
     // fila de pendentes nao depende do ano em vista, e num ano com categorias
     // mas sem movimento -- o caso de Janeiro de qualquer ano -- o utilizador
-    // tem de conseguir registar o primeiro gasto do ano mesmo assim.
-    // AddExpenseBar ja se esconde sozinho sem categorias de despesa (rows
+    // tem de conseguir registar o primeiro lancamento do ano mesmo assim.
+    // AddEntryBar ja se esconde sozinho sem categorias nenhumas (rows
     // vazio inclusive), por isso passar data?.rows tal e qual e seguro mesmo
     // nos ramos de erro e vazio.
     const bar = (
@@ -218,7 +218,7 @@ export default function DashboardPage() {
           onApply={applyPending}
           failures={pendingFailures}
         />
-        <AddExpenseBar
+        <AddEntryBar
           year={year}
           rows={data?.rows ?? []}
           onWritten={() => {

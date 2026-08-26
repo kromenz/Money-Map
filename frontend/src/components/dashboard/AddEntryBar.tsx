@@ -16,21 +16,30 @@ import {
 } from "@/components/ui/select";
 import { MONTH_LABELS } from "@/lib/format";
 import { groupCategories } from "@/lib/category-groups";
+import {
+  addLabel,
+  defaultSection,
+  sectionsPresent,
+  SECTION_LABELS,
+  type Section,
+} from "@/lib/entry-sections";
 import { addExpense } from "@/services/expense.service";
 import type { GridRow } from "@/types/budget";
 
 /**
- * Registar um gasto sem abrir o Excel.
+ * Registar um lancamento sem abrir o Excel.
  *
- * As categorias saem da grelha que ja esta carregada -- nenhum pedido novo. So
- * as de despesa: o mecanismo serve as tres seccoes, mas foi so o que se pediu.
+ * As categorias saem da grelha que ja esta carregada -- nenhum pedido novo. As
+ * tres seccoes da folha servem-se aqui: a fila de botoes escolhe qual, e tudo
+ * o que esta a jusante -- a rota, o localizador da celula, a fila de pendentes
+ * -- ja era agnostico a seccao desde o inicio.
  *
  * Os dois campos de escolha sao o <Select> da casa e nao <select> nativos. O
  * nativo deixa a lista ao sistema operativo, que a desenha com as cores dele --
  * no tema escuro abria um painel branco no meio de uma pagina escura. O da casa
  * usa os tokens --popover e acompanha o tema.
  */
-export function AddExpenseBar({
+export function AddEntryBar({
   year,
   rows,
   onWritten,
@@ -41,20 +50,34 @@ export function AddExpenseBar({
   onWritten: () => void;
   onPending: (count: number) => void;
 }) {
-  const categories = rows.filter((r) => r.section === "expenses");
-
   // null e nao "": e assim que o <Select.Value> sabe que ainda nao ha escolha e
   // mostra o placeholder em vez de uma linha vazia.
   const [categoryId, setCategoryId] = useState<string | null>(null);
+  // A seccao ESCOLHIDA, que nao e a mesma coisa que a seccao em vigor la em
+  // baixo. Comeca nula porque as linhas so chegam depois da primeira pintura.
+  const [chosenSection, setChosenSection] = useState<Section | null>(null);
   const [amount, setAmount] = useState("");
-  // O que foi comprado. Vai para dentro da formula da celula como N("..."), e
-  // e o que a lista do mes mostra depois -- sem ele a parcela fica anonima.
+  // O que foi comprado -- ou de onde veio o dinheiro. Vai para dentro da
+  // formula da celula como N("..."), e e o que a lista do mes mostra depois --
+  // sem ele a parcela fica anonima.
   const [note, setNote] = useState("");
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (categories.length === 0) return null;
+  const present = sectionsPresent(rows);
+  // A escolha so vale enquanto a folha em vista tiver essa seccao. Trocar para
+  // um ano cuja folha nao tem Savings deixava a barra presa numa lista vazia,
+  // sem nada a dizer porque. Cair no defaultSection resolve-o sem por um efeito
+  // a correr atras das linhas.
+  const section =
+    chosenSection !== null && present.includes(chosenSection)
+      ? chosenSection
+      : defaultSection(rows);
+
+  const categories = section === null ? [] : rows.filter((r) => r.section === section);
+
+  if (section === null || categories.length === 0) return null;
 
   // O `items` do Select serve so para o botao saber que texto mostrar depois de
   // escolhido -- sem isto o gatilho imprimia o categoryId cru.
@@ -79,6 +102,17 @@ export function AddExpenseBar({
   const tooManyDecimals = /\.\d{3,}/.test(normalizedAmount);
   const ready = categoryId !== null && value > 0 && !tooManyDecimals && !busy;
 
+  // Mudar de seccao larga a categoria escolhida. Sem isto ficava um id da
+  // seccao anterior em vigor: o `categories.find` la em baixo devolvia
+  // undefined e o submit saia em silencio -- um clique que nao faz nada nem
+  // diz porque.
+  function pickSection(next: Section) {
+    if (next === section) return;
+    setChosenSection(next);
+    setCategoryId(null);
+    setError(null);
+  }
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     const category = categories.find((c) => c.categoryId === categoryId);
@@ -90,7 +124,9 @@ export function AddExpenseBar({
       const result = await addExpense({
         year,
         month,
-        section: "expenses",
+        // Da linha e nao do estado: e a seccao da categoria que de facto foi
+        // escolhida, portanto nao ha maneira de as duas discordarem.
+        section: category.section,
         group: category.group,
         name: category.name,
         amount: value,
@@ -109,7 +145,7 @@ export function AddExpenseBar({
         setError(result.reason);
       }
     } catch {
-      setError("the expense could not be saved");
+      setError("the entry could not be saved");
     } finally {
       setBusy(false);
     }
@@ -119,6 +155,32 @@ export function AddExpenseBar({
     <form
       onSubmit={submit}
       className="flex flex-wrap items-start gap-3 rounded-xl border bg-card p-3 shadow-sm">
+      {/* Uma folha so com despesas nao ganha nada com um filtro de um botao so
+          -- nesse caso a barra fica exactamente como sempre esteve. */}
+      {present.length > 1 && (
+        <div
+          role="group"
+          aria-label="Section"
+          // 40px de altura, os mesmos dos campos ao lado: 36 do botao (h-9),
+          // 2 do padding e 2 da borda. Com p-0.5 dava 42 -- a borda conta.
+          className="flex items-center gap-0.5 rounded-md border bg-background p-px">
+          {present.map((s) => (
+            <Button
+              key={s}
+              // Sem isto o botao herda o type="submit" do <form> e escolher a
+              // seccao submetia o formulario.
+              type="button"
+              variant={s === section ? "default" : "ghost"}
+              size="sm"
+              aria-pressed={s === section}
+              onClick={() => pickSection(s)}
+              className="h-9">
+              {SECTION_LABELS[s]}
+            </Button>
+          ))}
+        </div>
+      )}
+
       <Select
         items={categoryItems}
         value={categoryId}
@@ -221,7 +283,7 @@ export function AddExpenseBar({
 
       <Button type="submit" size="lg" disabled={!ready} className="h-10 px-4">
         <PlusIcon />
-        {busy ? "Adding…" : "Add expense"}
+        {busy ? "Adding…" : addLabel(section)}
       </Button>
 
       {error && (
