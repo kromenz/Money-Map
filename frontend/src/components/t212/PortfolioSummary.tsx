@@ -1,6 +1,7 @@
 "use client";
 
 import { formatEur } from "@/lib/format";
+import { useHiddenValues } from "@/context/HiddenValuesContext";
 import type { Snapshot } from "@/types/t212";
 
 /**
@@ -9,6 +10,8 @@ import type { Snapshot } from "@/types/t212";
  * para baixo da dobra.
  */
 export function PortfolioSummary({ snapshot }: { snapshot: Snapshot | null }) {
+  const hidden = useHiddenValues();
+
   if (!snapshot) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -18,12 +21,12 @@ export function PortfolioSummary({ snapshot }: { snapshot: Snapshot | null }) {
   }
 
   const items = [
-    { label: "Total", value: formatEur(Number(snapshot.totalValue)) },
-    { label: "Invested", value: formatEur(Number(snapshot.invested)) },
-    { label: "Market value", value: formatEur(Number(snapshot.marketValue)) },
-    { label: "Cash", value: formatEur(Number(snapshot.cash)) },
-    { label: "Unrealized P/L", value: formatEur(Number(snapshot.unrealizedPl)) },
-    { label: "Realized P/L", value: formatEur(Number(snapshot.realizedPl)) },
+    { label: "Total", value: formatEur(Number(snapshot.totalValue), hidden) },
+    { label: "Invested", value: formatEur(Number(snapshot.invested), hidden) },
+    { label: "Market value", value: formatEur(Number(snapshot.marketValue), hidden) },
+    { label: "Cash", value: formatEur(Number(snapshot.cash), hidden) },
+    { label: "Unrealized P/L", value: formatEur(Number(snapshot.unrealizedPl), hidden) },
+    { label: "Realized P/L", value: formatEur(Number(snapshot.realizedPl), hidden) },
   ];
 
   return (

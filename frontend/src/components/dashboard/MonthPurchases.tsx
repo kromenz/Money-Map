@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRightIcon } from "lucide-react";
 import { formatEur } from "@/lib/format";
+import { useHiddenValues } from "@/context/HiddenValuesContext";
 import { fetchMonthParcels } from "@/services/parcels.service";
 import type { CategoryParcels } from "@/types/parcels";
 
@@ -19,6 +20,7 @@ import type { CategoryParcels } from "@/types/parcels";
  * empurrava a grelha para fora do ecra.
  */
 function CategoryRow({ category }: { category: CategoryParcels }) {
+  const hidden = useHiddenValues();
   const [open, setOpen] = useState(false);
   const label = category.group === "" ? category.name : `${category.group} · ${category.name}`;
 
@@ -35,7 +37,7 @@ function CategoryRow({ category }: { category: CategoryParcels }) {
           }`}
         />
         <span className="min-w-0 flex-1 truncate">{label}</span>
-        <span className="shrink-0 tabular-nums">{formatEur(Number(category.total))}</span>
+        <span className="shrink-0 tabular-nums">{formatEur(Number(category.total), hidden)}</span>
         <span className="w-14 shrink-0 text-right text-xs text-muted-foreground">
           {category.parcels.length === 1
             ? "1 item"
@@ -48,7 +50,7 @@ function CategoryRow({ category }: { category: CategoryParcels }) {
           {category.parcels.map((p) => (
             <li key={p.seq} className="flex items-baseline gap-3 py-1 text-sm">
               <span className="w-20 shrink-0 text-right tabular-nums">
-                {formatEur(Number(p.amount))}
+                {formatEur(Number(p.amount), hidden)}
               </span>
               {/* O travessao nao e falta de dados: e uma parcela que a folha ja
                   tinha antes de haver etiquetas, e continua a ser uma compra

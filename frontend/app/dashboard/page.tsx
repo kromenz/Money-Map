@@ -8,6 +8,7 @@ import { BudgetGrid } from "../../src/components/BudgetGrid";
 import { ImportWorkbook } from "../../src/components/ImportWorkbook";
 import { ImportReport } from "../../src/components/ImportReport";
 import { ThemeToggle } from "../../src/components/ThemeToggle";
+import { ValuesToggle } from "../../src/components/ValuesToggle";
 import { YearPills } from "../../src/components/YearPills";
 import { YearSummary } from "../../src/components/dashboard/YearSummary";
 import { CashflowChart } from "../../src/components/dashboard/CashflowChart";
@@ -355,6 +356,7 @@ export default function DashboardPage() {
               setReport(null);
             }}
           />
+          <ValuesToggle />
           <ThemeToggle />
         </div>
       </header>

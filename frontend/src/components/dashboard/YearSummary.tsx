@@ -1,6 +1,7 @@
 "use client";
 
 import { formatEur, formatPercent } from "@/lib/format";
+import { useHiddenValues } from "@/context/HiddenValuesContext";
 import type { YearMetrics } from "@/lib/budget-metrics";
 
 /**
@@ -12,12 +13,17 @@ import type { YearMetrics } from "@/lib/budget-metrics";
  * ver, e repeti-lo aqui era so ruido.
  */
 export function YearSummary({ metrics }: { metrics: YearMetrics }) {
+  const hidden = useHiddenValues();
+
+  // A taxa de poupanca fica de fora do tapume de proposito: e uma razao entre
+  // dois montantes, nao diz nenhum deles, e e o que resta para ler quando os
+  // euros estao escondidos.
   const items: { label: string; value: string }[] = [
-    { label: "In", value: formatEur(metrics.income) },
-    { label: "Out", value: formatEur(metrics.expenses) },
-    { label: "Saved", value: formatEur(metrics.savings) },
+    { label: "In", value: formatEur(metrics.income, hidden) },
+    { label: "Out", value: formatEur(metrics.expenses, hidden) },
+    { label: "Saved", value: formatEur(metrics.savings, hidden) },
     { label: "Savings rate", value: formatPercent(metrics.savingsRate) },
-    { label: "Left over", value: formatEur(metrics.unallocated) },
+    { label: "Left over", value: formatEur(metrics.unallocated, hidden) },
   ];
 
   return (

@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { formatAmount, formatEur, formatPercent } from "@/lib/format";
+import { HIDDEN, formatAmount, formatEur, formatPercent } from "@/lib/format";
+import { useHiddenValues } from "@/context/HiddenValuesContext";
 import { withWeights, type WeightedHolding } from "@/lib/t212-metrics";
 import type { Holding } from "@/types/t212";
 
@@ -10,18 +11,21 @@ type Column = {
   label: string;
   numeric: boolean;
   value: (h: WeightedHolding) => number | string;
-  render: (h: WeightedHolding) => string;
+  render: (h: WeightedHolding, hidden: boolean) => string;
 };
 
+// A quantidade e o valor sao tapados; o preco unitario e o preco medio pago
+// nao. Um preco por accao e cotacao de mercado -- diz o que a coisa custa, nao
+// quanto dela se tem -- e sem a quantidade nao reconstroi carteira nenhuma.
 const COLUMNS: Column[] = [
   { key: "ticker", label: "Instrument", numeric: false, value: (h) => h.name || h.ticker, render: (h) => h.name || h.ticker },
-  { key: "quantity", label: "Qty", numeric: true, value: (h) => Number(h.quantity), render: (h) => Number(h.quantity).toFixed(4) },
+  { key: "quantity", label: "Qty", numeric: true, value: (h) => Number(h.quantity), render: (h, hidden) => (hidden ? HIDDEN : Number(h.quantity).toFixed(4)) },
   { key: "averagePricePaid", label: "Avg price", numeric: true, value: (h) => Number(h.averagePricePaid), render: (h) => formatAmount(Number(h.averagePricePaid)) },
   { key: "currentPrice", label: "Price", numeric: true, value: (h) => Number(h.currentPrice), render: (h) => formatAmount(Number(h.currentPrice)) },
-  { key: "currentValue", label: "Value", numeric: true, value: (h) => Number(h.currentValue), render: (h) => formatEur(Number(h.currentValue)) },
-  { key: "unrealizedPl", label: "P/L", numeric: true, value: (h) => Number(h.unrealizedPl), render: (h) => formatEur(Number(h.unrealizedPl)) },
+  { key: "currentValue", label: "Value", numeric: true, value: (h) => Number(h.currentValue), render: (h, hidden) => formatEur(Number(h.currentValue), hidden) },
+  { key: "unrealizedPl", label: "P/L", numeric: true, value: (h) => Number(h.unrealizedPl), render: (h, hidden) => formatEur(Number(h.unrealizedPl), hidden) },
   { key: "weight", label: "Weight", numeric: true, value: (h) => h.weight ?? 0, render: (h) => formatPercent(h.weight) },
-  { key: "fxImpact", label: "FX impact", numeric: true, value: (h) => Number(h.fxImpact), render: (h) => formatEur(Number(h.fxImpact)) },
+  { key: "fxImpact", label: "FX impact", numeric: true, value: (h) => Number(h.fxImpact), render: (h, hidden) => formatEur(Number(h.fxImpact), hidden) },
 ];
 
 /**
@@ -30,6 +34,7 @@ const COLUMNS: Column[] = [
  * stack previa nunca chegou a ser instalado, e nao se justifica por isto.
  */
 export function HoldingsTable({ holdings }: { holdings: Holding[] }) {
+  const hidden = useHiddenValues();
   const [sort, setSort] = useState<{ key: string; desc: boolean }>({
     key: "currentValue",
     desc: true,
@@ -92,7 +97,7 @@ export function HoldingsTable({ holdings }: { holdings: Holding[] }) {
                       : "px-2 py-2 text-left"
                   }
                 >
-                  {c.render(h)}
+                  {c.render(h, hidden)}
                 </td>
               ))}
             </tr>

@@ -11,6 +11,8 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { chartData } from "@/lib/t212-metrics";
+import { eurTooltipFormatter } from "@/components/chart-tooltip-eur";
+import { useHiddenValues } from "@/context/HiddenValuesContext";
 import type { ChartPoint } from "@/types/t212";
 
 // As cores vivem so aqui: o <ChartStyle> do ui/chart.tsx transforma cada
@@ -37,7 +39,12 @@ const config = {
  * execucao, e o servidor ja o entrega arrastado.
  */
 export function PortfolioChart({ points }: { points: ChartPoint[] }) {
+  const hidden = useHiddenValues();
   const data = useMemo(() => chartData(points), [points]);
+  const formatter = useMemo(
+    () => eurTooltipFormatter(config, undefined, hidden),
+    [hidden]
+  );
 
   if (data.length === 0) {
     return (
@@ -59,8 +66,11 @@ export function PortfolioChart({ points }: { points: ChartPoint[] }) {
           minTickGap={32}
           tickFormatter={(v: string) => v.slice(2, 7)}
         />
-        <YAxis tickLine={false} axisLine={false} width={64} />
-        <ChartTooltip content={<ChartTooltipContent />} />
+        {/* O unico eixo Y com numeros escritos na app. Com os valores tapados
+            desaparece: as duas linhas continuam a dizer a forma e a distancia
+            entre elas, que e o que o grafico existe para mostrar. */}
+        <YAxis tickLine={false} axisLine={false} width={64} hide={hidden} />
+        <ChartTooltip content={<ChartTooltipContent formatter={formatter} />} />
         <ChartLegend content={<ChartLegendContent />} />
         <Line
           type="stepAfter"

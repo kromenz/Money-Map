@@ -8,6 +8,7 @@ import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
 import { fetchChart, fetchOverview } from "@/services/t212.service";
 import { chartData } from "@/lib/t212-metrics";
 import { formatEur, formatPercent } from "@/lib/format";
+import { useHiddenValues } from "@/context/HiddenValuesContext";
 
 const config = {
   marketValue: { label: "Market value", color: "var(--chart-income)" },
@@ -28,6 +29,7 @@ const config = {
  * a ligacao "Investments" do cabecalho continua la para quem quiser ir ver.
  */
 export function InvestmentsOverview() {
+  const hidden = useHiddenValues();
   const overview = useQuery({ queryKey: ["t212-overview"], queryFn: fetchOverview });
 
   const configured = Boolean(overview.data?.configured);
@@ -77,7 +79,7 @@ export function InvestmentsOverview() {
             Total
           </span>
           <span className="text-xl font-semibold tabular-nums">
-            {formatEur(total)}
+            {formatEur(total, hidden)}
           </span>
         </div>
 
@@ -92,7 +94,7 @@ export function InvestmentsOverview() {
                 : "text-xl font-semibold tabular-nums text-chart-expenses"
             }>
             {up ? "+" : ""}
-            {formatEur(unrealized)}
+            {formatEur(unrealized, hidden)}
             {ret === null ? "" : ` (${up ? "+" : ""}${formatPercent(ret)})`}
           </span>
         </div>
@@ -102,7 +104,7 @@ export function InvestmentsOverview() {
             Cash
           </span>
           <span className="text-xl font-semibold tabular-nums">
-            {formatEur(cash)}
+            {formatEur(cash, hidden)}
           </span>
         </div>
       </div>

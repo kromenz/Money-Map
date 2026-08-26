@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchCashFlows } from "@/services/t212.service";
 import { formatEur } from "@/lib/format";
+import { useHiddenValues } from "@/context/HiddenValuesContext";
 
 const PAGE = 50;
 
@@ -23,6 +24,7 @@ const LABELS: Record<string, string> = {
  * bridgeRows usa para escrever a folha, nao uma copia local.
  */
 export function CashFlowTable() {
+  const hidden = useHiddenValues();
   const [offset, setOffset] = useState(0);
 
   const { data } = useQuery({
@@ -49,7 +51,7 @@ export function CashFlowTable() {
               <tr key={c.externalId} className="border-b last:border-0">
                 <td className="px-2 py-2">{c.dateTime.slice(0, 10)}</td>
                 <td className="px-2 py-2">{LABELS[c.type] ?? c.type}</td>
-                <td className="px-2 py-2 text-right tabular-nums">{formatEur(Number(c.amount))}</td>
+                <td className="px-2 py-2 text-right tabular-nums">{formatEur(Number(c.amount), hidden)}</td>
                 <td className="px-2 py-2 text-xs text-muted-foreground">
                   {c.crossesBudget ? "Yes" : "No"}
                 </td>

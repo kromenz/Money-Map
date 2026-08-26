@@ -6,6 +6,7 @@ import { CategoryDeltas } from "./CategoryDeltas";
 import { MonthPurchases } from "./MonthPurchases";
 import { InvestmentsOverview } from "./InvestmentsOverview";
 import { formatEur, formatPercent } from "@/lib/format";
+import { useHiddenValues } from "@/context/HiddenValuesContext";
 import { deltaVsAverage } from "@/lib/budget-metrics";
 import type { MonthDetail, MonthAverages } from "@/lib/budget-metrics";
 import type { CategoryDelta } from "@/lib/category-deltas";
@@ -23,6 +24,8 @@ export function MonthPanel({
   deltas: CategoryDelta[];
   year: number;
 }) {
+  const hidden = useHiddenValues();
+
   return (
     <section className="space-y-4">
       <h2 className="text-sm font-medium text-muted-foreground">
@@ -32,25 +35,25 @@ export function MonthPanel({
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         <KpiCard
           label="Income"
-          value={formatEur(detail.income)}
+          value={formatEur(detail.income, hidden)}
           delta={deltaVsAverage(detail.income, averages.income)}
         />
         {/* Na despesa, subir e mau. E o unico KPI com o sentido invertido. */}
         <KpiCard
           label="Expenses"
-          value={formatEur(detail.expenses)}
+          value={formatEur(detail.expenses, hidden)}
           delta={deltaVsAverage(detail.expenses, averages.expenses)}
           higherIsBetter={false}
         />
         <KpiCard
           label="Savings"
-          value={formatEur(detail.savings)}
+          value={formatEur(detail.savings, hidden)}
           delta={deltaVsAverage(detail.savings, averages.savings)}
         />
         <KpiCard label="Savings rate" value={formatPercent(detail.savingsRate)} />
         <KpiCard
           label="Left over"
-          value={formatEur(detail.unallocated)}
+          value={formatEur(detail.unallocated, hidden)}
           delta={deltaVsAverage(detail.unallocated, averages.unallocated)}
         />
       </div>

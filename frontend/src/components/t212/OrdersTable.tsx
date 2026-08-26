@@ -3,11 +3,16 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchOrders } from "@/services/t212.service";
-import { formatEur } from "@/lib/format";
+import { HIDDEN, formatEur } from "@/lib/format";
+import { useHiddenValues } from "@/context/HiddenValuesContext";
 
 const PAGE = 50;
 
 export function OrdersTable() {
+  // A quantidade e o valor da ordem sao tapados. O preco por accao e a taxa de
+  // cambio ficam: sao cotacoes de mercado e, sem a quantidade, nao dizem
+  // quanto se investiu.
+  const hidden = useHiddenValues();
   const [ticker, setTicker] = useState("");
   const [side, setSide] = useState<"" | "BUY" | "SELL">("");
   const [offset, setOffset] = useState(0);
@@ -71,9 +76,9 @@ export function OrdersTable() {
                 <td className="px-2 py-2">{o.filledAt.slice(0, 10)}</td>
                 <td className="px-2 py-2">{o.ticker}</td>
                 <td className="px-2 py-2">{o.side === "BUY" ? "Buy" : "Sell"}</td>
-                <td className="px-2 py-2 text-right tabular-nums">{Number(o.quantity).toFixed(4)}</td>
+                <td className="px-2 py-2 text-right tabular-nums">{hidden ? HIDDEN : Number(o.quantity).toFixed(4)}</td>
                 <td className="px-2 py-2 text-right tabular-nums">{Number(o.price).toFixed(2)}</td>
-                <td className="px-2 py-2 text-right tabular-nums">{formatEur(Number(o.netValue))}</td>
+                <td className="px-2 py-2 text-right tabular-nums">{formatEur(Number(o.netValue), hidden)}</td>
                 <td className="px-2 py-2 text-right tabular-nums">
                   {o.fxRate ? Number(o.fxRate).toFixed(4) : "—"}
                 </td>

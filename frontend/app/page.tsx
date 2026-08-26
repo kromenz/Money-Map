@@ -9,6 +9,7 @@ import { BrandPanel } from "../src/components/auth/BrandPanel";
 import { SignInForm } from "../src/components/auth/SignInForm";
 import { SignUpForm } from "../src/components/auth/SignUpForm";
 import { ThemeToggle } from "../src/components/ThemeToggle";
+import { ValuesToggle } from "../src/components/ValuesToggle";
 import { useAuthContext } from "../src/context/AuthContext";
 import * as authService from "../src/services/auth.service";
 import type { SignUpPayload } from "../src/types/auth";
@@ -113,6 +114,7 @@ export default function HomePage() {
 
         <div className="relative z-10 flex min-h-dvh flex-col lg:bg-background">
           <div className="flex justify-end p-4">
+            <ValuesToggle />
             <ThemeToggle />
           </div>
 

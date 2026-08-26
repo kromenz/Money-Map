@@ -15,6 +15,7 @@ import { OrdersTable } from "../../src/components/t212/OrdersTable";
 import { CashFlowTable } from "../../src/components/t212/CashFlowTable";
 import { NotConfigured } from "../../src/components/t212/NotConfigured";
 import { ThemeToggle } from "../../src/components/ThemeToggle";
+import { ValuesToggle } from "../../src/components/ValuesToggle";
 import { t212StageLabel } from "../../src/lib/t212-labels";
 
 // O detalhe tecnico (mensagem crua do axios) vive so no title, nunca no
@@ -134,6 +135,7 @@ export default function InvestmentsPage() {
           <Link href="/dashboard" className="text-sm text-muted-foreground hover:text-foreground">
             Budget
           </Link>
+          <ValuesToggle />
           <ThemeToggle />
         </div>
       </header>
