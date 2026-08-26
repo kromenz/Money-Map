@@ -310,3 +310,50 @@ export async function clearPendingRetrying(
   }
   return false;
 }
+
+/**
+ * O que a ponte do Trading 212 ainda deve a folha.
+ *
+ * Vive aqui e nao no servico do browser porque so o lado servidor tem o
+ * BUDGET_FOLDER -- e quem escreve na folha e este lado.
+ */
+export async function fetchBridgePending(
+  cookie: string
+): Promise<import("@/types/bridge").SheetEdit[]> {
+  try {
+    const res = await fetch(`${API_BASE}/t212/sheet/pending`, {
+      headers: { cookie },
+    });
+    if (!res.ok) return [];
+    const body = (await res.json()) as { edits: import("@/types/bridge").SheetEdit[] };
+    return body.edits ?? [];
+  } catch {
+    // A ponte e um extra do dashboard: sem backend a pagina serve na mesma.
+    return [];
+  }
+}
+
+/**
+ * Regista no servidor o que a folha aceitou.
+ *
+ * Devolve false sem escrever nada quando a lista esta vazia ou o pedido falha.
+ * O chamador nao volta atras por causa disso: a folha ja tem as parcelas, e a
+ * marcacao perdida faz a proxima corrida propor os mesmos deltas outra vez --
+ * o que e visivel e corrigivel, ao contrario de uma escrita silenciosa a dobrar.
+ */
+export async function markBridgeWritten(
+  cookie: string,
+  written: { externalId: string; amount: string }[]
+): Promise<boolean> {
+  if (written.length === 0) return true;
+  try {
+    const res = await fetch(`${API_BASE}/t212/sheet/written`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ written }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}

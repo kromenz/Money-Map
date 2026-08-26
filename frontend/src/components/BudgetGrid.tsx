@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchGrid } from "../services/budget.service";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MONTH_LABELS, formatAmount } from "@/lib/format";
+import { useHiddenValues } from "@/context/HiddenValuesContext";
 import { groupRows } from "@/lib/group-rows";
 
 const SECTION_LABEL: Record<string, string> = {
@@ -13,14 +14,16 @@ const SECTION_LABEL: Record<string, string> = {
   expenses: "Expenses",
 };
 
-function money(value: string) {
+function money(value: string, hidden: boolean) {
   const n = Number(value);
   // Um zero em cada celula vazia enchia a grelha de ruido com a mesma forca
-  // visual de um valor real. O travessao le-se como ausencia.
+  // visual de um valor real. O travessao le-se como ausencia. Continua a
+  // aparecer com os valores tapados: uma celula vazia nao e um segredo, e
+  // mascara-la fingia que ha ali dinheiro.
   if (n === 0) return <span className="text-muted-foreground/50">—</span>;
   return (
     <span className={n < 0 ? "text-destructive" : undefined}>
-      {formatAmount(n)}
+      {formatAmount(n, hidden)}
     </span>
   );
 }
@@ -38,6 +41,7 @@ export function BudgetGrid({
   /** Indice 0-11 do mes em foco no dashboard, para destacar a coluna. */
   selectedMonth?: number | null;
 }) {
+  const hidden = useHiddenValues();
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["budget-grid", year],
     queryFn: () => fetchGrid(year),
@@ -160,11 +164,11 @@ export function BudgetGrid({
                             className={`px-2 py-1.5 text-right tabular-nums ${
                               monthCell(i, selectedMonth) ?? ""
                             }`}>
-                            {money(v)}
+                            {money(v, hidden)}
                           </td>
                         ))}
                         <td className="border-l px-2 py-1.5 text-right font-medium tabular-nums">
-                          {money(row.total)}
+                          {money(row.total, hidden)}
                         </td>
                       </tr>
                     ))}
@@ -182,11 +186,11 @@ export function BudgetGrid({
                         className={`px-2 py-2 text-right tabular-nums ${
                           monthCell(i, selectedMonth) ?? ""
                         }`}>
-                        {money(v)}
+                        {money(v, hidden)}
                       </td>
                     ))}
                     <td className="border-l px-2 py-2 text-right tabular-nums">
-                      {money(total.total)}
+                      {money(total.total, hidden)}
                     </td>
                   </tr>
                 )}

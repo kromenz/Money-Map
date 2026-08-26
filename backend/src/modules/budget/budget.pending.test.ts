@@ -72,6 +72,7 @@ describe("toPendingResponse", () => {
       group: "Home",
       name: "Groceries",
       amount: new Prisma.Decimal("12.5"),
+      note: "Continente",
     };
 
     expect(toPendingResponse([row])).toEqual([
@@ -83,6 +84,9 @@ describe("toPendingResponse", () => {
         group: "Home",
         name: "Groceries",
         amount: "12.50",
+        // A etiqueta atravessa a fila: sem ela, um gasto registado com o Excel
+        // aberto chegava a folha sem nome.
+        note: "Continente",
       },
     ]);
   });

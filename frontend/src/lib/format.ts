@@ -9,7 +9,12 @@ const eur = new Intl.NumberFormat("en-IE", {
   currency: "EUR",
 });
 
-export function formatEur(value: number): string {
+// Quatro pontos fixos, nao um por digito: o comprimento da mascara nao pode
+// contar quantos algarismos o numero tinha, senao esconder deixava de esconder.
+export const HIDDEN = "••••";
+
+export function formatEur(value: number, hidden = false): string {
+  if (hidden) return HIDDEN;
   return eur.format(value);
 }
 
@@ -21,7 +26,8 @@ const amount = new Intl.NumberFormat("en-IE", {
   maximumFractionDigits: 2,
 });
 
-export function formatAmount(value: number): string {
+export function formatAmount(value: number, hidden = false): string {
+  if (hidden) return HIDDEN;
   return amount.format(value);
 }
 

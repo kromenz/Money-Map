@@ -20,6 +20,13 @@ model User {
   transactions  Transaction[]
   rules         Rule[]
   pendingExpenses PendingExpense[]
+  holdings        Holding[]
+  snapshots       PortfolioSnapshot[]
+  brokerOrders    BrokerOrder[]
+  brokerDividends BrokerDividend[]
+  brokerCashFlows BrokerCashFlow[]
+  syncStates      SyncState[]
+  sheetParcels    SheetParcel[]
 }
 
 enum AuthProvider {
@@ -89,6 +96,7 @@ model Category {
   archived     Boolean       @default(false)
   transactions Transaction[]
   rules        Rule[]
+  sheetParcels SheetParcel[]
 
   @@unique([userId, section, group, name])
   @@index([userId, section, sortOrder])
@@ -109,11 +117,53 @@ model Transaction {
   source         TxSource
   externalId     String?
   notes          String?
+  /**
+   * Quanto desta linha ja esta escrito na folha do Excel.
+   *
+   * So as linhas da ponte do Trading 212 o usam; nas de origem `excel` nao faz
+   * sentido, porque essas vieram da folha. Null quer dizer "nada escrito
+   * ainda"; o que falta escrever e sempre `amount - sheetAmount`.
+   *
+   * E um valor e nao um booleano por causa do agregado mensal dos juros, que
+   * cresce enquanto o mes corre: a folha soma por incrementos, portanto o que
+   * se escreve na segunda vez e so a diferenca.
+   */
+  sheetAmount    Decimal?  @db.Decimal(12, 2)
   createdAt      DateTime  @default(now())
 
   @@unique([userId, externalId])
   @@index([userId, date])
   @@index([userId, categoryId])
+}
+
+/// Uma parcela de uma celula da folha: `=42.88+11.39` sao duas destas.
+///
+/// Existe a parte da Transaction de proposito. A Transaction e o agregado
+/// mensal por categoria, e e ela que a importacao verifica ao centimo contra a
+/// folha -- mexer no seu grao era mexer no codigo que protege o ficheiro do
+/// utilizador. Isto e detalhe para mostrar e para procurar, e vive ao lado.
+model SheetParcel {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  year       Int
+  /// 1 = Janeiro.
+  month      Int
+  /// A ordem dentro da celula, que e a ordem por que foram escritas.
+  seq        Int
+  /// Na convencao de armazenamento, a mesma da Transaction: a soma das
+  /// parcelas de uma celula tem de dar o amount da Transaction desse mes.
+  amount     Decimal  @db.Decimal(12, 2)
+  /// A etiqueta N("..."), quando a parcela tem uma. Null em tudo o que ja
+  /// estava escrito na folha antes de isto existir.
+  note       String?
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, categoryId, year, month, seq])
+  @@index([userId, year, month])
+  @@index([userId, note])
 }
 
 model Rule {
@@ -142,7 +192,161 @@ model PendingExpense {
   group     String   @map("category_group")
   name      String
   amount    Decimal  @db.Decimal(12, 2)
+  /// A etiqueta que vai acompanhar o valor na formula da celula. Sem ela, um
+  /// gasto registado com o Excel aberto chegava a folha sem nome -- a fila
+  /// perdia em silencio o que o utilizador escreveu.
+  note      String?
   createdAt DateTime @default(now())
 
   @@index([userId, year])
+}
+
+enum BrokerSide {
+  BUY
+  SELL
+}
+
+enum CashFlowType {
+  DEPOSIT
+  WITHDRAW
+  FEE
+  TRANSFER
+  INTEREST_ON_FREE_CASH
+  LENDING_INTEREST
+}
+
+enum SyncKind {
+  summary
+  positions
+  orders
+  dividends
+  transactions
+  /// A ponte nao le a API, mas e a etapa que mexe no orcamento -- e era a unica
+  /// sem estado gravado, so porque este valor nao existia aqui. Podia falhar em
+  /// todas as corridas agendadas com as outras cinco etapas verdes no painel e
+  /// nada a dize-lo.
+  bridge
+}
+
+/// A carteira de agora, nao um historico: reescrita inteira a cada sync.
+/// O historico vive no PortfolioSnapshot.
+model Holding {
+  id               String   @id @default(uuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticker           String
+  name             String   @default("")
+  currency         String   @default("")
+  quantity         Decimal  @db.Decimal(18, 8)
+  averagePricePaid Decimal  @db.Decimal(18, 8)
+  currentPrice     Decimal  @db.Decimal(18, 8)
+  currentValue     Decimal  @db.Decimal(12, 2)
+  totalCost        Decimal  @db.Decimal(12, 2)
+  unrealizedPl     Decimal  @db.Decimal(12, 2)
+  fxImpact         Decimal  @db.Decimal(12, 2)
+  syncedAt         DateTime @default(now())
+
+  @@unique([userId, ticker])
+}
+
+/// Uma linha por dia medido. Um dia sem linha e um dia em que a app nao correu
+/// -- e o grafico desenha a lacuna em vez de a interpolar.
+model PortfolioSnapshot {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date         DateTime @db.Date
+  cash         Decimal  @db.Decimal(12, 2)
+  invested     Decimal  @db.Decimal(12, 2)
+  marketValue  Decimal  @db.Decimal(12, 2)
+  totalValue   Decimal  @db.Decimal(12, 2)
+  realizedPl   Decimal  @db.Decimal(12, 2)
+  unrealizedPl Decimal  @db.Decimal(12, 2)
+  createdAt    DateTime @default(now())
+
+  @@unique([userId, date])
+}
+
+/// Uma linha por execucao, nao por ordem: uma ordem pode encher em varias
+/// execucoes com precos diferentes. Dai o externalId ser orderId:fillId.
+model BrokerOrder {
+  userId        String
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String     @id @default(uuid())
+  externalId    String
+  filledAt      DateTime
+  ticker        String
+  side          BrokerSide
+  orderType     String     @default("")
+  quantity      Decimal    @db.Decimal(18, 8)
+  price         Decimal    @db.Decimal(18, 8)
+  netValue      Decimal    @db.Decimal(12, 2)
+  fxRate        Decimal?   @db.Decimal(18, 8)
+  taxes         Json?
+  initiatedFrom String     @default("")
+  status        String     @default("")
+  createdAt     DateTime   @default(now())
+
+  @@unique([userId, externalId])
+  @@index([userId, filledAt])
+}
+
+model BrokerDividend {
+  id                  String   @id @default(uuid())
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  externalId          String
+  paidOn              DateTime
+  ticker              String
+  quantity            Decimal  @db.Decimal(18, 8)
+  grossAmountPerShare Decimal  @db.Decimal(18, 8)
+  amount              Decimal  @db.Decimal(12, 2)
+  currency            String   @default("")
+  amountInEuro        Decimal  @db.Decimal(12, 2)
+  type                String   @default("")
+  createdAt           DateTime @default(now())
+
+  @@unique([userId, externalId])
+  @@index([userId, paidOn])
+}
+
+model BrokerCashFlow {
+  id         String       @id @default(uuid())
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  externalId String
+  dateTime   DateTime
+  type       CashFlowType
+  amount     Decimal      @db.Decimal(12, 2)
+  currency   String       @default("")
+  createdAt  DateTime     @default(now())
+
+  @@unique([userId, externalId])
+  @@index([userId, dateTime])
+}
+
+/// Duas modalidades, e o backfillDone e o que as separa.
+///
+/// Enquanto o backfill nao acabou, percorre-se ate ao fim do historico e o
+/// backfillCursor marca ate onde se foi, para uma interrupcao nao obrigar a
+/// recomecar. Depois de acabado, passa-se a parar no primeiro item conhecido.
+///
+/// Sem esta distincao o backfill interrompido nunca se completava: as paginas
+/// vem da mais recente para tras, e a corrida seguinte parava logo na primeira.
+model SyncState {
+  id             String    @id @default(uuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind           SyncKind
+  backfillDone   Boolean   @default(false)
+  backfillCursor String?
+  lastRunAt      DateTime?
+  lastError      String?
+  // Quantos itens a ultima corrida desta etapa saltou no Zod. Sete ETFs em
+  // euros desapareceram de uma sincronizacao real com a etapa a reportar
+  // ok:true -- o numero existia no StageReport mas morria ali, nunca gravado.
+  lastSkipped    Int       @default(0)
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([userId, kind])
 }

@@ -10,7 +10,8 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { MONTH_LABELS } from "@/lib/format";
-import { eurTooltipFormatter } from "./chart-tooltip-eur";
+import { eurTooltipFormatter } from "@/components/chart-tooltip-eur";
+import { useHiddenValues } from "@/context/HiddenValuesContext";
 import type { YearSeries } from "@/lib/year-comparison";
 
 // Uma entrada por posicao da rampa e nao por ano, pela mesma razao que o
@@ -35,6 +36,7 @@ const SLOTS = [
  * comportamento por omissao, mas aqui e o ponto todo do grafico e nao um acaso.
  */
 export function CumulativeChart({ series }: { series: YearSeries[] }) {
+  const hidden = useHiddenValues();
   const config: ChartConfig = Object.fromEntries(
     series.map((s, i) => [`s${i}`, { label: String(s.year), color: SLOTS[i] }])
   );
@@ -47,7 +49,7 @@ export function CumulativeChart({ series }: { series: YearSeries[] }) {
     return point;
   });
 
-  const formatter = eurTooltipFormatter(config);
+  const formatter = eurTooltipFormatter(config, undefined, hidden);
 
   return (
     <ChartContainer config={config} className="h-64 w-full">

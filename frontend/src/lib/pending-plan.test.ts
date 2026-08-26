@@ -10,6 +10,7 @@ const row = (over: Partial<PendingExpense>): PendingExpense => ({
   group: "Home",
   name: "Groceries",
   amount: "12.50",
+  note: null,
   ...over,
 });
 
@@ -63,5 +64,19 @@ describe("groupPendingByYear", () => {
 
   it("uma fila vazia da uma lista vazia", () => {
     expect(groupPendingByYear([])).toEqual([]);
+  });
+});
+
+describe("groupPendingByYear, a etiqueta", () => {
+  it("a etiqueta atravessa a fila ate ao applyExpenses", () => {
+    // Sem isto, um gasto registado com o Excel aberto chegava a folha sem
+    // nome -- a fila perdia em silencio o que o utilizador escreveu.
+    const [batch] = groupPendingByYear([row({ note: "Continente" })]);
+    expect(batch.expenses[0].note).toBe("Continente");
+  });
+
+  it("sem etiqueta na fila nao se inventa nenhuma", () => {
+    const [batch] = groupPendingByYear([row({ note: null })]);
+    expect(batch.expenses[0].note).toBeUndefined();
   });
 });

@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { Bar, BarChart, ReferenceLine, XAxis, YAxis } from "recharts";
 import {
   ChartContainer,
@@ -9,7 +10,8 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import { eurTooltipFormatter } from "./chart-tooltip-eur";
+import { eurTooltipFormatter } from "@/components/chart-tooltip-eur";
+import { useHiddenValues } from "@/context/HiddenValuesContext";
 import type { YearTotals } from "@/lib/year-comparison";
 
 // As mesmas tres cores de fluxo do CashflowChart, para as duas vistas nao
@@ -21,8 +23,6 @@ const config = {
   savings: { label: "Savings", color: "var(--chart-savings)" },
 } satisfies ChartConfig;
 
-const formatter = eurTooltipFormatter(config);
-
 /**
  * Barras agrupadas: uma tripla por ano, todas acima do zero.
  *
@@ -31,6 +31,11 @@ const formatter = eurTooltipFormatter(config);
  * se compara com as barras a assentar todas na mesma linha de base.
  */
 export function YearTotalsChart({ totals }: { totals: YearTotals[] }) {
+  const hidden = useHiddenValues();
+  const formatter = useMemo(
+    () => eurTooltipFormatter(config, undefined, hidden),
+    [hidden]
+  );
   const data = totals.map((t) => ({
     label: String(t.year),
     income: t.income,

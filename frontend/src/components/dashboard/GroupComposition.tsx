@@ -1,6 +1,7 @@
 "use client";
 
-import { formatEur } from "@/lib/format";
+import { formatEur, formatPercent } from "@/lib/format";
+import { useHiddenValues } from "@/context/HiddenValuesContext";
 
 // Uma entrada por posicao da rampa, nao por grupo: os nomes dos grupos vem do
 // ficheiro importado e podem ter espacos, acentos ou "&", e as custom properties
@@ -38,12 +39,20 @@ export function GroupComposition({
   // adivinhar: quem o usa e que sabe o que dizer quando nao ha nada.
   emptyMessage: string;
 }) {
+  const hidden = useHiddenValues();
+
   // Reembolsos podem deixar um grupo com total liquido negativo (ver
   // budget-metrics.ts). Isso e correcto para os totais, mas um segmento de
   // comprimento negativo nao existe. Filtramos aqui, so para o desenho -- o
   // CategoryDeltas ao lado mostra os negativos honestamente.
   const positive = byGroup.filter((g) => g.amount > 0);
   const total = positive.reduce((s, g) => s + g.amount, 0);
+
+  // Com os valores tapados, cada grupo mostra a sua quota -- que e exactamente
+  // o que o comprimento do segmento ja desenha. Nao e informacao nova a
+  // escapar: e o mesmo numero, escrito.
+  const share = (amount: number) =>
+    hidden ? formatPercent(amount / total) : formatEur(amount);
 
   if (total === 0) {
     return (
@@ -61,7 +70,7 @@ export function GroupComposition({
         {positive.map((g, i) => (
           <div
             key={i}
-            title={`${g.group}: ${formatEur(g.amount)}`}
+            title={`${g.group}: ${share(g.amount)}`}
             style={{
               width: `${(g.amount / total) * 100}%`,
               background: SLOTS[i],
@@ -81,7 +90,7 @@ export function GroupComposition({
               style={{ background: SLOTS[i] }}
             />
             <span className="text-muted-foreground">{g.group}</span>
-            <span className="tabular-nums">{formatEur(g.amount)}</span>
+            <span className="tabular-nums">{share(g.amount)}</span>
           </li>
         ))}
       </ul>

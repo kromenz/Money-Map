@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { Bar, BarChart, Cell, ReferenceLine, XAxis, YAxis } from "recharts";
 import {
   ChartContainer,
@@ -10,7 +11,8 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { MONTH_LABELS } from "@/lib/format";
-import { eurTooltipFormatter } from "./chart-tooltip-eur";
+import { eurTooltipFormatter } from "@/components/chart-tooltip-eur";
+import { useHiddenValues } from "@/context/HiddenValuesContext";
 import type { MonthPoint, MonthAverages } from "@/lib/budget-metrics";
 
 // As cores vivem so aqui: o <ChartStyle> do ui/chart.tsx transforma cada entrada
@@ -27,11 +29,6 @@ const config = {
 // (barSelectors.js:20-25), por isso barras de clique no eixo predefinido
 // encolheriam as visiveis. Num eixo separado ficam sozinhas e ocupam o mes.
 const HIT_AXIS = "hit";
-
-// Despesa e poupanca chegam ao grafico negativas, para cairem abaixo do zero.
-// O sinal e uma conveniencia de desenho, nao um facto sobre o dinheiro: o
-// tooltip mostra os tres valores em positivo.
-const formatter = eurTooltipFormatter(config, Math.abs);
 
 /**
  * No tema escuro o par receita/despesa fica em CVD ΔE 7.8, dentro da banda 6-8
@@ -52,6 +49,15 @@ export function CashflowChart({
   selectedMonth: number;
   onSelectMonth: (month: number) => void;
 }) {
+  const hidden = useHiddenValues();
+  // Despesa e poupanca chegam ao grafico negativas, para cairem abaixo do zero.
+  // O sinal e uma conveniencia de desenho, nao um facto sobre o dinheiro: o
+  // tooltip mostra os tres valores em positivo.
+  const formatter = useMemo(
+    () => eurTooltipFormatter(config, Math.abs, hidden),
+    [hidden]
+  );
+
   // Barras de clique com a altura maxima do dominio, para os 12 meses serem
   // clicaveis mesmo a zeros: o recharts descarta rectangulos de dimensao zero
   // antes de desenhar (cartesian/Bar.js:663) e o onClick vive no <Cell> desse

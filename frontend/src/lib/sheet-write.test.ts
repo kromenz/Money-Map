@@ -203,3 +203,84 @@ describe("applyEdits, varias de uma vez", () => {
     expect(out).toContain(`<f>SUM(C26:C26)</f><v>15</v>`);
   });
 });
+
+describe("applyEdits, etiquetas dentro da formula", () => {
+  const cell = (f: string, v: string) =>
+    `<worksheet><sheetData><row r="26" spans="1:16">` +
+    `<c r="C26" s="37"><f>${f}</f><v>${v}</v></c>` +
+    `</row></sheetData></worksheet>`;
+
+  it("a etiqueta vem logo a seguir ao valor que descreve", () => {
+    // Le-se "valor, e o que ele foi". No fim da formula, com varias parcelas,
+    // deixava de se saber a qual e que pertencia.
+    const out = applyEdits(cell("10", "10"), [
+      { ref: "C26", delta: 5, mode: "formula", note: "PS5" },
+    ]);
+    expect(out).toContain(`<f>10+5+N("PS5")</f>`);
+  });
+
+  it("a etiqueta nao entra na soma -- N() de texto vale zero", () => {
+    const out = applyEdits(cell("10", "10"), [
+      { ref: "C26", delta: 5, mode: "formula", note: "PS5" },
+    ]);
+    expect(out).toContain("<v>15</v>");
+  });
+
+  it("cada parcela fica com a sua etiqueta ao acumular", () => {
+    const primeira = applyEdits(cell("10", "10"), [
+      { ref: "C26", delta: 5, mode: "formula", note: "PS5" },
+    ]);
+    const segunda = applyEdits(primeira, [
+      { ref: "C26", delta: 3, mode: "formula", note: "Amazon" },
+    ]);
+    expect(segunda).toContain(`<f>10+5+N("PS5")+3+N("Amazon")</f>`);
+    expect(segunda).toContain("<v>18</v>");
+  });
+
+  it("sem etiqueta a formula fica como sempre esteve", () => {
+    const out = applyEdits(cell("10", "10"), [
+      { ref: "C26", delta: 5, mode: "formula" },
+    ]);
+    expect(out).toContain("<f>10+5</f>");
+    expect(out).not.toContain("N(");
+  });
+
+  it("aspas na etiqueta duplicam-se, que e como o Excel as leva", () => {
+    const out = applyEdits(cell("10", "10"), [
+      { ref: "C26", delta: 5, mode: "formula", note: 'o "grande"' },
+    ]);
+    expect(out).toContain(`<f>10+5+N("o ""grande""")</f>`);
+  });
+
+  it("o & e os sinais de menor e maior escapam para o XML", () => {
+    // Uma etiqueta com um & partia o zip inteiro: o <f> e um no de texto XML.
+    const out = applyEdits(cell("10", "10"), [
+      { ref: "C26", delta: 5, mode: "formula", note: "M&S <promo>" },
+    ]);
+    expect(out).toContain(`N("M&amp;S &lt;promo&gt;")`);
+    expect(out).not.toContain("M&S");
+  });
+
+  it("uma celula vazia com etiqueta comeca a formula pelo valor", () => {
+    const xml =
+      `<worksheet><sheetData><row r="26" spans="1:16">` +
+      `<c r="C26" s="37"/>` +
+      `</row></sheetData></worksheet>`;
+    const out = applyEdits(xml, [
+      { ref: "C26", delta: 5, mode: "formula", note: "PS5" },
+    ]);
+    expect(out).toContain(`<f>5+N("PS5")</f><v>5</v>`);
+  });
+
+  it("um subtotal em modo valor ignora a etiqueta -- nao tem formula onde a por", () => {
+    const xml =
+      `<worksheet><sheetData><row r="30" spans="1:16">` +
+      `<c r="C30" s="40"><f>SUM(C26:C26)</f><v>10</v></c>` +
+      `</row></sheetData></worksheet>`;
+    const out = applyEdits(xml, [
+      { ref: "C30", delta: 5, mode: "value", note: "PS5" },
+    ]);
+    expect(out).toContain(`<f>SUM(C26:C26)</f><v>15</v>`);
+    expect(out).not.toContain("N(");
+  });
+});

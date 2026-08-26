@@ -5,6 +5,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import * as authService from "../services/auth.service";
@@ -24,7 +25,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  /**
+   * Retomar a sessao e um gesto que so pode acontecer uma vez por montagem.
+   *
+   * Nao e um efeito idempotente: o /auth/refresh RODA o token no servidor --
+   * cria a linha nova e apaga a velha. Com o reactStrictMode ligado, o React
+   * corre o efeito de montagem duas vezes, e o resultado eram dois pedidos com
+   * 1ms de intervalo a rodar o mesmo token. Um respondia 200 e o outro 500, e
+   * quem chegasse por ultimo decidia: se fosse o erro, o catch punha o user a
+   * null e o useRequireAuth mandava o utilizador para a pagina de entrada.
+   * Dava um F5 que deslogava dia sim, dia nao.
+   */
+  const resumed = useRef(false);
+
   useEffect(() => {
+    if (resumed.current) return;
+    resumed.current = true;
+
     (async () => {
       try {
         const data = await authService.refresh(); // tries to refresh using cookie refresh_token

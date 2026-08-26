@@ -108,3 +108,8 @@ docs/superpowers
 # de fora para nao haver duas versoes da mesma coisa, uma legivel e outra nao.
 *.exe
 *.lnk
+
+# Copias de seguranca de ficheiros de ambiente (ex.: .env.bak-antes-t212).
+# O padrao .env acima nao as apanha, e um git add -A varria-as para o commit.
+.env.bak*
+*.env.bak*

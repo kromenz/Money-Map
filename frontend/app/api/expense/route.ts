@@ -49,6 +49,15 @@ export async function POST(request: Request) {
     return bad("that expense is not valid");
   }
 
+  // A etiqueta e texto livre do utilizador e vai parar a uma formula do Excel.
+  // Corta-se aqui e nao la dentro: uma formula tem um limite de 8192
+  // caracteres, e uma etiqueta enorme comia o espaco das compras seguintes na
+  // mesma celula. As aspas e o &<> sao escapados pelo sheet-write.
+  const note =
+    typeof body.note === "string" && body.note.trim() !== ""
+      ? body.note.trim().slice(0, 60)
+      : undefined;
+
   const cookie = request.headers.get("cookie") ?? "";
 
   async function respondPending(): Promise<Response> {
@@ -59,6 +68,7 @@ export async function POST(request: Request) {
       group: body.group,
       name: body.name,
       amount: amount.toFixed(2),
+      note,
     });
     if (!queued) return bad("could not save the expense as pending", 502);
 
@@ -95,6 +105,7 @@ export async function POST(request: Request) {
           name: body.name,
           month: body.month,
           amount,
+          note,
         },
       ]);
     } catch (err) {

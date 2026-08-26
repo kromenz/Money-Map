@@ -95,7 +95,14 @@ export async function applyExpenses(
     // Localiza-se sempre sobre o ficheiro original: as linhas nao se movem, e
     // so mudam valores.
     const found = await locateCells(file, expense);
-    edits.push({ ref: found.cell, delta: expense.amount, mode: "formula" });
+    // A etiqueta so na celula da categoria: os subtotais escrevem-se em modo
+    // valor, que nao tem formula onde a por, e repeti-la la seria ruido.
+    edits.push({
+      ref: found.cell,
+      delta: expense.amount,
+      mode: "formula",
+      note: expense.note,
+    });
     if (found.groupSubtotal) {
       edits.push({ ref: found.groupSubtotal, delta: expense.amount, mode: "value" });
     }

@@ -17,12 +17,47 @@ export type GridResponse = {
   sectionTotals: { section: string; months: string[]; total: string }[];
 };
 
-/** Desfaz a inversao de sinal, devolvendo a convencao da folha. */
+/**
+ * Fonte unica da convencao de sinal do `amount` na tabela Transaction.
+ *
+ * A folha de Excel escreve poupancas e despesas como grandezas positivas
+ * ("poupei 200", "gastei 45"). A base de dados guarda o `amount` como movimento
+ * com sinal -- negativo quando o dinheiro sai da conta corrente -- portanto
+ * `savings` e `expenses` ficam gravados invertidos face a folha, e `income`
+ * fica tal e qual (nessa seccao as duas convencoes coincidem).
+ *
+ * Esta regra existia so como a expressao `section === "income" ? x : -x`
+ * repetida em quatro sitios. Um modulo novo (a ponte do Trading 212) foi
+ * escrito sem ela e gravou os depositos crus, o que fez a grelha mostrar
+ * -500,00 EUR num deposito de 500 EUR. Por isso mora aqui: quem escreve no
+ * Transaction chama toStored, quem le chama toDisplay, e ninguem reescreve a
+ * expressao a mao.
+ */
+export function toStored(section: string, sheetValue: number): number;
+export function toStored(
+  section: string,
+  sheetValue: Prisma.Decimal
+): Prisma.Decimal;
+export function toStored(
+  section: string,
+  sheetValue: number | Prisma.Decimal
+): number | Prisma.Decimal {
+  if (section === "income") return sheetValue;
+  return typeof sheetValue === "number" ? -sheetValue : sheetValue.negated();
+}
+
+/**
+ * Desfaz a inversao de sinal, devolvendo a convencao da folha.
+ *
+ * Delega no toStored de proposito: a inversao e a sua propria inversa, e
+ * escrever a expressao outra vez aqui era voltar a ter duas copias da regra
+ * que podiam divergir.
+ */
 export function toDisplay(
   section: string,
   amount: Prisma.Decimal
 ): Prisma.Decimal {
-  return section === "income" ? amount : amount.negated();
+  return toStored(section, amount);
 }
 
 export async function buildGrid(

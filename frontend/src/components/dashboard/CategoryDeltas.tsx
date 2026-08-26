@@ -1,6 +1,8 @@
 "use client";
 
 import { formatEur } from "@/lib/format";
+import { useHiddenValues } from "@/context/HiddenValuesContext";
+import { deltaVsAverage } from "@/lib/budget-metrics";
 import type { CategoryDelta } from "@/lib/category-deltas";
 
 const TOP_N = 6;
@@ -13,6 +15,8 @@ const TOP_N = 6;
  * dois vocabularios visuais na mesma pagina obrigavam a aprender ambos.
  */
 export function CategoryDeltas({ deltas }: { deltas: CategoryDelta[] }) {
+  const hidden = useHiddenValues();
+
   // Um so mes activo no ano faz media == valor em todas as categorias, logo
   // delta == 0 em todas -- sem este filtro a lista mostrava seis linhas de
   // "(-EUR0.00)" com barras de largura zero. O limiar 0.005 e o mesmo que o
@@ -39,6 +43,12 @@ export function CategoryDeltas({ deltas }: { deltas: CategoryDelta[] }) {
         // por 2 no width abaixo, e as duas se cancelavam sem dizer nada.
         const pct = widest === 0 ? 0 : Math.abs(d.delta) / widest;
         const over = d.delta > 0;
+        // Com os valores tapados o desvio passa a relativo: "(+18%)" em vez de
+        // um segundo tapume ao lado do primeiro, que nao dizia nada. E a mesma
+        // conta e o mesmo arredondamento do "vs average" dos KpiCard por cima,
+        // para as duas leituras nao divergirem. O sinal ja vem escrito a parte.
+        // Media zero nao tem variacao percentual -- ai fica a mascara.
+        const rel = deltaVsAverage(d.amount, d.average);
         return (
           // Indice na chave: os nomes vem do ficheiro importado e podem
           // repetir-se entre grupos.
@@ -47,10 +57,13 @@ export function CategoryDeltas({ deltas }: { deltas: CategoryDelta[] }) {
               {d.name}
             </span>
             <span className="tabular-nums text-muted-foreground">
-              {formatEur(d.amount)}{" "}
+              {formatEur(d.amount, hidden)}{" "}
               <span className={over ? "text-destructive" : ""}>
                 ({over ? "+" : "−"}
-                {formatEur(Math.abs(d.delta))})
+                {hidden && rel !== null
+                  ? `${Math.abs(Math.round(rel * 100))}%`
+                  : formatEur(Math.abs(d.delta), hidden)}
+                )
               </span>
             </span>
 

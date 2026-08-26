@@ -1,0 +1,216 @@
+import { Prisma } from "@prisma/client";
+import { prisma } from "../../db/prisma";
+import { loadT212Config } from "./t212.config";
+import {
+  accountCurrencyPrice,
+  investedSeries,
+  type InvestedEvent,
+} from "./t212.invested";
+import { mergeChart, type ChartPoint } from "./t212.chart";
+import { derivedCutoff, crossesToBudget, effectiveCutoff } from "./t212.bridge";
+import { sheetEdits } from "./t212.sheet";
+import { prismaRepo, sheetRepo } from "./t212.repo";
+import { toHoldingViews, toStatusViews, type HoldingView, type StatusView } from "./t212.view";
+
+export type OverviewResponse = {
+  configured: boolean;
+  snapshot: {
+    date: string;
+    cash: string;
+    invested: string;
+    marketValue: string;
+    totalValue: string;
+    realizedPl: string;
+    unrealizedPl: string;
+  } | null;
+  holdings: HoldingView[];
+  status: StatusView[];
+  cutoff: string | null;
+};
+
+export async function getOverview(userId: string): Promise<OverviewResponse> {
+  const cfg = loadT212Config();
+
+  const [snapshot, holdings, states, lastExcel] = await Promise.all([
+    prisma.portfolioSnapshot.findFirst({ where: { userId }, orderBy: { date: "desc" } }),
+    prisma.holding.findMany({ where: { userId } }),
+    prisma.syncState.findMany({
+      where: { userId },
+      select: { kind: true, lastRunAt: true, lastError: true, lastSkipped: true },
+    }),
+    prismaRepo.lastExcelMonth(userId),
+  ]);
+
+  return {
+    configured: cfg.configured,
+    snapshot: snapshot
+      ? {
+          date: snapshot.date.toISOString().slice(0, 10),
+          cash: snapshot.cash.toFixed(2),
+          invested: snapshot.invested.toFixed(2),
+          marketValue: snapshot.marketValue.toFixed(2),
+          totalValue: snapshot.totalValue.toFixed(2),
+          realizedPl: snapshot.realizedPl.toFixed(2),
+          unrealizedPl: snapshot.unrealizedPl.toFixed(2),
+        }
+      : null,
+    holdings: toHoldingViews(holdings),
+    status: toStatusViews(states),
+    cutoff: effectiveCutoff(cfg.bridgeFrom, derivedCutoff(lastExcel)),
+  };
+}
+
+export async function getChart(userId: string): Promise<{ points: ChartPoint[] }> {
+  const [orders, snapshots] = await Promise.all([
+    prisma.brokerOrder.findMany({
+      where: { userId },
+      orderBy: { filledAt: "asc" },
+      select: {
+        filledAt: true,
+        ticker: true,
+        side: true,
+        quantity: true,
+        netValue: true,
+      },
+    }),
+    prisma.portfolioSnapshot.findMany({
+      where: { userId },
+      orderBy: { date: "asc" },
+      select: { date: true, marketValue: true },
+    }),
+  ]);
+
+  // O preco vem do netValue, nao do `price` da execucao: o `price` esta na
+  // moeda do instrumento e a serie tem de ficar toda na moeda da conta, que e
+  // aquela em que a linha de valor de mercado esta desenhada.
+  const events: InvestedEvent[] = orders.map((o) => ({
+    date: o.filledAt.toISOString().slice(0, 10),
+    ticker: o.ticker,
+    side: o.side,
+    quantity: o.quantity.toFixed(8),
+    price: accountCurrencyPrice(o.quantity, o.netValue).toFixed(8),
+  }));
+
+  return {
+    points: mergeChart(
+      investedSeries(events),
+      snapshots.map((s) => ({
+        date: s.date.toISOString().slice(0, 10),
+        marketValue: s.marketValue.toFixed(2),
+      }))
+    ),
+  };
+}
+
+export async function getDividends(userId: string, year?: number) {
+  const where =
+    year === undefined
+      ? { userId }
+      : {
+          userId,
+          paidOn: { gte: new Date(Date.UTC(year, 0, 1)), lt: new Date(Date.UTC(year + 1, 0, 1)) },
+        };
+
+  const rows = await prisma.brokerDividend.findMany({ where, orderBy: { paidOn: "desc" } });
+
+  return {
+    items: rows.map((r) => ({
+      externalId: r.externalId,
+      paidOn: r.paidOn.toISOString().slice(0, 10),
+      ticker: r.ticker,
+      quantity: r.quantity.toFixed(8),
+      amount: r.amount.toFixed(2),
+      currency: r.currency,
+      amountInEuro: r.amountInEuro.toFixed(2),
+      type: r.type,
+    })),
+    totalInEuro: rows
+      .reduce((acc, r) => acc.add(r.amountInEuro), new Prisma.Decimal(0))
+      .toFixed(2),
+  };
+}
+
+export async function getOrders(
+  userId: string,
+  opts: { ticker?: string; side?: "BUY" | "SELL"; limit: number; offset: number }
+) {
+  const where = {
+    userId,
+    ...(opts.ticker ? { ticker: { contains: opts.ticker, mode: "insensitive" as const } } : {}),
+    ...(opts.side ? { side: opts.side } : {}),
+  };
+
+  const [rows, total] = await Promise.all([
+    prisma.brokerOrder.findMany({ where, orderBy: { filledAt: "desc" }, take: opts.limit, skip: opts.offset }),
+    prisma.brokerOrder.count({ where }),
+  ]);
+
+  return {
+    total,
+    items: rows.map((r) => ({
+      externalId: r.externalId,
+      filledAt: r.filledAt.toISOString(),
+      ticker: r.ticker,
+      side: r.side,
+      orderType: r.orderType,
+      quantity: r.quantity.toFixed(8),
+      price: r.price.toFixed(8),
+      netValue: r.netValue.toFixed(2),
+      fxRate: r.fxRate ? r.fxRate.toFixed(8) : null,
+      initiatedFrom: r.initiatedFrom,
+    })),
+  };
+}
+
+export async function getCashFlows(userId: string, opts: { limit: number; offset: number }) {
+  const cfg = loadT212Config();
+
+  // O corte calcula-se uma vez, fora do ciclo: e o mesmo para todos os itens
+  // desta pagina, e repetir a consulta ao Excel por linha so multiplicava
+  // trabalho sem mudar a resposta.
+  const [rows, total, lastExcel] = await Promise.all([
+    prisma.brokerCashFlow.findMany({
+      where: { userId },
+      orderBy: { dateTime: "desc" },
+      take: opts.limit,
+      skip: opts.offset,
+    }),
+    prisma.brokerCashFlow.count({ where: { userId } }),
+    prismaRepo.lastExcelMonth(userId),
+  ]);
+  const cutoff = effectiveCutoff(cfg.bridgeFrom, derivedCutoff(lastExcel));
+
+  return {
+    total,
+    items: rows.map((r) => {
+      const date = r.dateTime.toISOString().slice(0, 10);
+      return {
+        externalId: r.externalId,
+        dateTime: r.dateTime.toISOString(),
+        type: r.type,
+        amount: r.amount.toFixed(2),
+        currency: r.currency,
+        crossesBudget: crossesToBudget(r.type, date, cutoff),
+      };
+    }),
+  };
+}
+
+/**
+ * O que a ponte ainda deve a folha.
+ *
+ * Quem escreve no .xlsx e o frontend -- e o unico lado que conhece o
+ * BUDGET_FOLDER, e o unico com o cadeado, o backup e o mecanismo de escrita
+ * cirurgica no XML. Estas duas rotas sao a conversa: uma diz o que falta, a
+ * outra regista o que a folha aceitou.
+ */
+export async function getSheetPending(userId: string) {
+  return { edits: sheetEdits(await sheetRepo.bridgeRowsWithSheetState(userId)) };
+}
+
+export async function markSheetWritten(
+  userId: string,
+  written: { externalId: string; amount: string }[]
+) {
+  return { marked: await sheetRepo.markSheetWritten(userId, written) };
+}
