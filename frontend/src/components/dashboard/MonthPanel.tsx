@@ -88,6 +88,9 @@ export function MonthPanel({
         year={year}
         month={detail.month + 1}
         monthLabel={monthLabel}
+        // O mesmo byGroup que alimenta a barra ali em cima: e dai que os cards
+        // herdam a cor de cada grupo.
+        byGroup={detail.byGroup}
       />
     </section>
   );
