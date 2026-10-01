@@ -2,25 +2,7 @@
 
 import { formatEur, formatPercent } from "@/lib/format";
 import { useHiddenValues } from "@/context/HiddenValuesContext";
-
-// Uma entrada por posicao da rampa, nao por grupo: os nomes dos grupos vem do
-// ficheiro importado e podem ter espacos, acentos ou "&", e as custom properties
-// exigem identificadores CSS validos. Com chaves fixas as cores continuam a
-// viver so no globals.css.
-//
-// Indexadas directamente, sem modulo: o groupExpenses (budget-metrics.ts)
-// garante no maximo seis entradas -- TOP_GROUPS grupos mais Other -- e ciclar a
-// rampa daria ao setimo a cor do primeiro. Estes seis slots e o TOP_GROUPS tem
-// de subir juntos: mexer so num deixa SLOTS[6] a undefined e um segmento
-// transparente.
-const SLOTS = [
-  "var(--chart-1)",
-  "var(--chart-2)",
-  "var(--chart-3)",
-  "var(--chart-4)",
-  "var(--chart-5)",
-  "var(--chart-6)",
-];
+import { SLOTS } from "@/lib/group-slots";
 
 /**
  * Composicao da despesa do mes por grupo, em barra horizontal empilhada.

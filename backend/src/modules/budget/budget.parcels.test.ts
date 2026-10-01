@@ -29,6 +29,86 @@ describe("parseParcels", () => {
     ]);
   });
 
+  it("uma etiqueta escrita a mao ANTES do valor cola-se ao valor que se segue", () => {
+    // A celula real: =N("SUB Tots")+3.74. O Excel mostra 3,74 mas guarda 3.74.
+    expect(parseParcels('=N("SUB Tots")+3.74')).toEqual([
+      { value: 3.74, note: "SUB Tots" },
+    ]);
+    expect(parseParcels('=N("SUB Tots")+3.74+N("Netflix")+12.99')).toEqual([
+      { value: 3.74, note: "SUB Tots" },
+      { value: 12.99, note: "Netflix" },
+    ]);
+  });
+
+  it("a barra pode acrescentar valor+etiqueta a uma celula que comecou por etiqueta", () => {
+    // O sheet-write escreve `+delta+N("x")` no fim, seja qual for o estilo da
+    // celula. Um estilo por celula era uma regra que a barra ia partir.
+    expect(parseParcels('=N("SUB Tots")+3.74+12.99+N("Netflix")')).toEqual([
+      { value: 3.74, note: "SUB Tots" },
+      { value: 12.99, note: "Netflix" },
+    ]);
+  });
+
+  it("a meio da formula a etiqueta e do valor que se segue, que e como se escreve a mao", () => {
+    // Celulas reais de 2026. Colar o "Buenissima" ao 46 punha o nome na
+    // compra errada.
+    expect(parseParcels('=17+46+N("Buenissima")+52')).toEqual([
+      { value: 17, note: null },
+      { value: 46, note: null },
+      { value: 52, note: "Buenissima" },
+    ]);
+    expect(parseParcels('=17+N("Shopping mc")+10.25')).toEqual([
+      { value: 17, note: null },
+      { value: 10.25, note: "Shopping mc" },
+    ]);
+  });
+
+  it("um grupo entre parenteses e uma parcela, com a soma do grupo", () => {
+    // A celula real: varias pecas da mesma revisao sob uma etiqueta so.
+    expect(
+      parseParcels(
+        '=N("Mecanico")+545+N("Revisão Peças")+(3.79+5.98+3.79+3.41+0.56+9.49+3.79+26.59)'
+      )
+    ).toEqual([
+      { value: 545, note: "Mecanico" },
+      { value: 57.4, note: "Revisão Peças" },
+    ]);
+    expect(parseParcels('=36.87+N("Macaco + peça")+(55.57+9.99)')).toEqual([
+      { value: 36.87, note: null },
+      { value: 65.56, note: "Macaco + peça" },
+    ]);
+    expect(parseParcels("=27.9+(13.99)+97.49")).toEqual([
+      { value: 27.9, note: null },
+      { value: 13.99, note: null },
+      { value: 97.49, note: null },
+    ]);
+  });
+
+  it("uma multiplicacao e uma parcela, com o produto", () => {
+    expect(parseParcels('=N("Prozis")+23.28+N("Kinder Joy")+2*3.29+N("Pão")+0.76')).toEqual([
+      { value: 23.28, note: "Prozis" },
+      { value: 6.58, note: "Kinder Joy" },
+      { value: 0.76, note: "Pão" },
+    ]);
+    expect(parseParcels('=53.5*2+9.27+N("PS5")+649.99')).toEqual([
+      { value: 107, note: null },
+      { value: 9.27, note: null },
+      { value: 649.99, note: "PS5" },
+    ]);
+    expect(parseParcels("=95.83*2")).toEqual([{ value: 191.66, note: null }]);
+    expect(parseParcels("=-(106.66+78.58)")).toEqual([{ value: -185.24, note: null }]);
+  });
+
+  it("uma etiqueta sem valor a que se colar nao se inventa", () => {
+    expect(parseParcels('=N("SUB Tots")')).toEqual([]);
+    expect(parseParcels('=N("a")+N("b")+3.74')).toEqual([]);
+    expect(parseParcels('=3.74+N("a")+N("b")')).toEqual([]);
+  });
+
+  it("uma etiqueta so se junta com +, nunca com -", () => {
+    expect(parseParcels('=3.74-N("a")')).toEqual([]);
+  });
+
   it("um unico valor tambem e uma parcela", () => {
     expect(parseParcels("=650")).toEqual([{ value: 650, note: null }]);
   });
@@ -72,12 +152,17 @@ describe("parseParcels", () => {
       expect(parseParcels("=C26+12.5")).toEqual([]);
     });
 
-    it("uma multiplicacao nao tem parcelas", () => {
-      expect(parseParcels("=12.5*3")).toEqual([]);
+    it("uma etiqueta dentro de parenteses nao tem parcelas", () => {
+      expect(parseParcels('=(5+N("a")+3)')).toEqual([]);
     });
 
-    it("parenteses nao tem parcelas", () => {
-      expect(parseParcels("=-(12.5+3)")).toEqual([]);
+    it("parenteses por fechar nao tem parcelas", () => {
+      expect(parseParcels("=(12.5+3")).toEqual([]);
+      expect(parseParcels("=12.5+3)")).toEqual([]);
+    });
+
+    it("uma divisao por zero nao tem parcelas", () => {
+      expect(parseParcels("=12.5/0")).toEqual([]);
     });
 
     it("uma formula truncada no operador nao tem parcelas", () => {
