@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useHiddenValues } from "@/context/HiddenValuesContext";
 import { formatEur, MONTH_LABELS } from "@/lib/format";
+import { pendingNoticeView } from "@/lib/pending-notice";
 import type { FlushResponse, RejectedPending } from "@/types/expense";
 
 /**
@@ -38,10 +39,14 @@ export function PendingNotice({
   // pedidos, e o segundo so servia para confundir.
   const [discarding, setDiscarding] = useState<string | null>(null);
 
-  if (count === 0 && rejected.length === 0) return null;
-
-  // count vem do flush e ja inclui as rejeitadas.
-  const waiting = Math.max(0, count - rejected.length);
+  const view = pendingNoticeView({
+    count,
+    rejected: rejected.length,
+    busy,
+    discarding: discarding !== null,
+  });
+  if (!view.visible) return null;
+  const { waiting } = view;
 
   async function discard(id: string) {
     setDiscarding(id);
@@ -56,11 +61,17 @@ export function PendingNotice({
     <div
       role="status"
       className="flex flex-col gap-3 rounded-lg border bg-muted/40 p-4">
-      {waiting > 0 && (
+      {view.showApply && (
         <div className="flex items-center gap-4">
           <p className="min-w-0 flex-1 text-sm">
-            {waiting === 1 ? "1 expense is" : `${waiting} expenses are`} waiting — close
-            Excel to apply {waiting === 1 ? "it" : "them"}.
+            {waiting > 0 ? (
+              <>
+                {waiting === 1 ? "1 expense is" : `${waiting} expenses are`} waiting — close
+                Excel to apply {waiting === 1 ? "it" : "them"}.
+              </>
+            ) : (
+              "Fixed the sheet? Apply again to retry."
+            )}
           </p>
           <button
             type="button"
@@ -106,7 +117,7 @@ export function PendingNotice({
                 <button
                   type="button"
                   onClick={() => void discard(r.id)}
-                  disabled={discarding !== null}
+                  disabled={!view.canDiscard}
                   className="shrink-0 rounded-md border px-3 py-1 text-sm hover:bg-muted disabled:opacity-50">
                   {discarding === r.id ? "Discarding…" : "Discard"}
                 </button>

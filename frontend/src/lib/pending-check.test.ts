@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import ExcelJS from "exceljs";
 import { checkBatch, missingRowReason } from "./pending-check";
+import { SheetTargetError } from "./sheet-locate";
 import type { YearBatch } from "./pending-plan";
 import type { NewExpense } from "@/types/expense";
 import { parseBudgetWorkbook } from "../../../backend/src/modules/budget/budget.parser";
@@ -94,6 +96,22 @@ describe("checkBatch", () => {
     await expect(
       checkBatch(garbage, batch(["a"], [await realExpense(1)]))
     ).rejects.toThrow();
+  });
+
+  it("uma folha sem cabecalho falha o lote, nao cada entrada", async () => {
+    // O caso que o ficheiro-lixo acima nao apanha: aqui o locateCells lanca
+    // mesmo um SheetTargetError, so que sem `missing`. Se o checkBatch
+    // rejeitasse qualquer SheetTargetError, cada gasto bom ganhava um botao
+    // Discard por um defeito que e da folha.
+    const wb = new ExcelJS.Workbook();
+    wb.addWorksheet("Budget").getCell("B2").value = "Sem cabecalho de meses";
+    const noHeader = new Uint8Array(await wb.xlsx.writeBuffer());
+
+    const err = await checkBatch(noHeader, batch(["a", "b"], [ghost(1), ghost(2)])).catch(
+      (e: unknown) => e
+    );
+    expect(err).toBeInstanceOf(SheetTargetError);
+    expect((err as SheetTargetError).missing).toBeUndefined();
   });
 
   it("um lote vazio da um lote vazio", async () => {
