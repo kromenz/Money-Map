@@ -27,6 +27,7 @@ model User {
   brokerCashFlows BrokerCashFlow[]
   syncStates      SyncState[]
   sheetParcels    SheetParcel[]
+  inboxReceipts   InboxReceipt[]
 }
 
 enum AuthProvider {
@@ -199,6 +200,20 @@ model PendingExpense {
   createdAt DateTime @default(now())
 
   @@index([userId, year])
+}
+
+/// Cada registo vindo do telemovel que ja entrou na fila. Existe para que um
+/// DELETE falhado na cloud nao faca a mesma entrada entrar duas vezes -- nem
+/// depois de a pendente ja ter sido escrita na folha e apagada da fila.
+/// Nao se apaga: e um UUID e uma data por gasto.
+model InboxReceipt {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceId   String   @unique
+  receivedAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 enum BrokerSide {
