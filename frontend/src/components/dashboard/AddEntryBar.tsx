@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarIcon, PencilIcon, PlusIcon, TagIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,7 +24,9 @@ import {
   SECTION_LABELS,
   type Section,
 } from "@/lib/entry-sections";
+import { suggestNotes } from "@/lib/note-suggestions";
 import { addExpense } from "@/services/expense.service";
+import { fetchNotes } from "@/services/notes.service";
 import type { GridRow } from "@/types/budget";
 
 /**
@@ -64,6 +67,21 @@ export function AddEntryBar({
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A lista so abre depois de se mexer no campo: aberta ao carregar a pagina
+  // tapava o botao de submeter sem ninguem a ter pedido.
+  const [notesOpen, setNotesOpen] = useState(false);
+  // -1 e "nenhuma realcada": o Enter submete o formulario como sempre fez, e so
+  // escolhe uma etiqueta depois de a seta ter descido ate ela.
+  const [highlight, setHighlight] = useState(-1);
+  const listId = useId();
+
+  const queryClient = useQueryClient();
+  // A lista inteira de uma vez e nao um pedido por letra: sao no maximo
+  // duzentas etiquetas curtas, e filtrar em memoria e instantaneo.
+  const { data: knownNotes } = useQuery({
+    queryKey: ["budget-notes"],
+    queryFn: fetchNotes,
+  });
 
   const present = sectionsPresent(rows);
   // A escolha so vale enquanto a folha em vista tiver essa seccao. Trocar para
@@ -94,6 +112,9 @@ export function AddEntryBar({
   const grouped = groupCategories(categories);
   const monthItems = MONTH_LABELS.map((label, i) => ({ value: i + 1, label }));
 
+  const suggestions = suggestNotes(knownNotes ?? [], note);
+  const showSuggestions = notesOpen && suggestions.length > 0;
+
   const normalizedAmount = amount.replace(",", ".");
   const value = Number(normalizedAmount);
   // Mais de duas casas decimais: a rota arredonda antes de escrever, mas
@@ -106,6 +127,39 @@ export function AddEntryBar({
   // seccao anterior em vigor: o `categories.find` la em baixo devolvia
   // undefined e o submit saia em silencio -- um clique que nao faz nada nem
   // diz porque.
+  // Escolher uma sugestao escreve-a no campo tal e qual -- a lista poupa
+  // teclas, nao corrige o que ja la esta.
+  function pickNote(picked: string) {
+    setNote(picked);
+    setNotesOpen(false);
+    setHighlight(-1);
+  }
+
+  function noteKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Escape") {
+      setNotesOpen(false);
+      setHighlight(-1);
+      return;
+    }
+    if (!showSuggestions) return;
+
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      // Da a volta nas duas pontas, e o -1 do fundo devolve o foco ao que foi
+      // escrito -- descer ate ao fim nao pode prender ninguem na lista.
+      const next = highlight + step;
+      setHighlight(next < -1 ? suggestions.length - 1 : next % suggestions.length);
+      return;
+    }
+    if (event.key === "Enter" && highlight >= 0) {
+      // So aqui e que o Enter e roubado ao formulario: com uma etiqueta
+      // realcada ele escolhe-a; sem nenhuma, submete como sempre.
+      event.preventDefault();
+      pickNote(suggestions[highlight].note);
+    }
+  }
+
   function pickSection(next: Section) {
     if (next === section) return;
     setChosenSection(next);
@@ -136,6 +190,8 @@ export function AddEntryBar({
       if (result.status === "written") {
         setAmount("");
         setNote("");
+        // A etiqueta acabada de escrever passa a poder ser sugerida na proxima.
+        queryClient.invalidateQueries({ queryKey: ["budget-notes"] });
         onWritten();
       } else if (result.status === "pending") {
         setAmount("");
@@ -245,19 +301,70 @@ export function AddEntryBar({
         )}
       </div>
 
+      {/* A lista sai por baixo do campo e nao empurra a barra: o formulario ja
+          quebra em varias linhas, e um campo que muda de altura ao escrever
+          fazia o botao de submeter fugir debaixo do rato. */}
       <div className="relative">
         <PencilIcon className="pointer-events-none absolute inset-y-0 left-3 my-auto size-3.5 text-muted-foreground" />
         <Input
           aria-label="What was it"
           placeholder="What was it? (optional)"
           value={note}
-          onChange={(e) => setNote(e.target.value)}
+          onChange={(e) => {
+            setNote(e.target.value);
+            setNotesOpen(true);
+            setHighlight(-1);
+          }}
+          onFocus={() => setNotesOpen(true)}
+          // Fecha um instante depois: sem isto o blur matava a lista antes de o
+          // clique nela chegar a acontecer.
+          onBlur={() => window.setTimeout(() => setNotesOpen(false), 120)}
+          onKeyDown={noteKeyDown}
+          role="combobox"
+          aria-expanded={showSuggestions}
+          aria-controls={listId}
+          aria-autocomplete="list"
+          aria-activedescendant={
+            highlight >= 0 ? `${listId}-${highlight}` : undefined
+          }
           // 60 e o mesmo limite que a rota impoe. Cortar aqui tambem evita
           // que o utilizador escreva 200 caracteres e so depois descubra que
           // a folha guardou 60.
           maxLength={60}
           className="h-10 w-56 pl-9"
         />
+
+        {showSuggestions && (
+          <ul
+            id={listId}
+            role="listbox"
+            aria-label="Labels you have used"
+            className="absolute left-0 top-11 z-20 w-56 overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
+            {suggestions.map((s, i) => (
+              <li key={s.note}>
+                <button
+                  type="button"
+                  id={`${listId}-${i}`}
+                  role="option"
+                  aria-selected={i === highlight}
+                  // O rato so escolhe ao levantar, mas o campo perde o foco ao
+                  // carregar. Travar o mousedown mantem o foco onde estava e
+                  // deixa o clique chegar ao fim.
+                  onMouseDown={(e) => e.preventDefault()}
+                  onMouseEnter={() => setHighlight(i)}
+                  onClick={() => pickNote(s.note)}
+                  className={`flex w-full items-baseline justify-between gap-2 rounded-sm px-2 py-1.5 text-left text-sm ${
+                    i === highlight ? "bg-accent text-accent-foreground" : ""
+                  }`}>
+                  <span className="truncate">{s.note}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                    ×{s.uses}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <Select

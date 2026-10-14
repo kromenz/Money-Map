@@ -31,18 +31,54 @@ describe("loadT212Config", () => {
   });
 
   it("usa seis horas por omissao", () => {
-    expect(loadT212Config({ T212_API_KEY: "k" }).syncIntervalHours).toBe(6);
+    expect(loadT212Config({ T212_API_KEY: "k" }).syncIntervalMinutes).toBe(360);
+  });
+
+  it("le o intervalo em minutos", () => {
+    // Um minuto em horas era 0.0167 -- funcionava, mas ninguem o escrevia bem.
+    expect(
+      loadT212Config({ T212_API_KEY: "k", T212_SYNC_INTERVAL_MINUTES: "1" })
+        .syncIntervalMinutes
+    ).toBe(1);
+  });
+
+  it("continua a aceitar o intervalo em horas, que e o que os .env antigos tem", () => {
+    expect(
+      loadT212Config({ T212_API_KEY: "k", T212_SYNC_INTERVAL_HOURS: "2" })
+        .syncIntervalMinutes
+    ).toBe(120);
+  });
+
+  it("os minutos ganham as horas quando vem os dois", () => {
+    expect(
+      loadT212Config({
+        T212_API_KEY: "k",
+        T212_SYNC_INTERVAL_MINUTES: "5",
+        T212_SYNC_INTERVAL_HOURS: "2",
+      }).syncIntervalMinutes
+    ).toBe(5);
   });
 
   it("recusa um intervalo que nao e numero positivo e volta ao omisso", () => {
+    for (const env of [
+      { T212_SYNC_INTERVAL_HOURS: "abc" },
+      { T212_SYNC_INTERVAL_HOURS: "0" },
+      { T212_SYNC_INTERVAL_MINUTES: "abc" },
+      { T212_SYNC_INTERVAL_MINUTES: "0" },
+      { T212_SYNC_INTERVAL_MINUTES: "-3" },
+    ]) {
+      expect(loadT212Config({ T212_API_KEY: "k", ...env }).syncIntervalMinutes).toBe(360);
+    }
+  });
+
+  it("uns minutos invalidos nao impedem as horas de valer", () => {
     expect(
-      loadT212Config({ T212_API_KEY: "k", T212_SYNC_INTERVAL_HOURS: "abc" })
-        .syncIntervalHours
-    ).toBe(6);
-    expect(
-      loadT212Config({ T212_API_KEY: "k", T212_SYNC_INTERVAL_HOURS: "0" })
-        .syncIntervalHours
-    ).toBe(6);
+      loadT212Config({
+        T212_API_KEY: "k",
+        T212_SYNC_INTERVAL_MINUTES: "abc",
+        T212_SYNC_INTERVAL_HOURS: "2",
+      }).syncIntervalMinutes
+    ).toBe(120);
   });
 
   it("aceita uma data de corte em YYYY-MM-DD", () => {

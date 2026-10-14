@@ -19,16 +19,20 @@ import { DashboardSkeleton } from "../../src/components/dashboard/DashboardSkele
 import { FolderScanNotice } from "../../src/components/dashboard/FolderScanNotice";
 import { AddEntryBar } from "../../src/components/dashboard/AddEntryBar";
 import { PendingNotice } from "../../src/components/dashboard/PendingNotice";
+import { PhoneInboxNotice } from "../../src/components/dashboard/PhoneInboxNotice";
+import { syncInbox } from "../../src/services/inbox.service";
+import { phoneInboxMessage } from "../../src/lib/phone-inbox";
 import { fetchGrid } from "../../src/services/budget.service";
 import { scanFolder } from "../../src/services/folder-scan.service";
 import { flushPending } from "../../src/services/expense.service";
+import { discardPending } from "../../src/services/pending.service";
 import { flushBridge } from "../../src/services/bridge.service";
 import { yearMetrics, monthDetail } from "../../src/lib/budget-metrics";
 import { categoryDeltas } from "../../src/lib/category-deltas";
 import { MONTH_LABELS } from "../../src/lib/format";
 import type { ImportResult } from "../../src/types/budget";
 import type { FolderScanFailure } from "../../src/types/folder-scan";
-import type { FlushResponse } from "../../src/types/expense";
+import type { FlushResponse, RejectedPending } from "../../src/types/expense";
 
 export default function DashboardPage() {
   const { user, loading } = useRequireAuth("/");
@@ -47,7 +51,9 @@ export default function DashboardPage() {
   const [scanning, setScanning] = useState(false);
   const [pending, setPending] = useState(0);
   const [pendingFailures, setPendingFailures] = useState<FlushResponse["failures"]>([]);
+  const [pendingRejected, setPendingRejected] = useState<RejectedPending[]>([]);
   const [flushing, setFlushing] = useState(false);
+  const [phoneMessage, setPhoneMessage] = useState<ReturnType<typeof phoneInboxMessage>>(null);
 
   // isPending cobre pending+fetching, pending+paused (offline) e
   // pending+disabled -- qualquer estado sem dados ainda, nao so "a carregar".
@@ -79,6 +85,9 @@ export default function DashboardPage() {
     if (!data || scanned.current) return;
     scanned.current = true;
     void runScan(false)
+      // Entre o varrimento e a fila: o que chega do telemovel entra na fila, e
+      // o applyPending a seguir escreve-o na mesma volta.
+      .then(() => syncPhone())
       .then(() => applyPending())
       // A ponte por ultimo, e a seguir ao varrimento: e o varrimento que
       // importa a folha e faz o corte avancar, e correr a ponte antes disso
@@ -100,6 +109,7 @@ export default function DashboardPage() {
       const result = await flushBridge();
       if (result.written > 0) {
         await queryClient.invalidateQueries({ queryKey: ["budget-grid"] });
+        await queryClient.invalidateQueries({ queryKey: ["budget-parcels"] });
       }
       // A folha ficou escrita mas o servidor nao soube: a proxima corrida
       // escreveria os mesmos valores outra vez. E o unico desfecho aqui que o
@@ -112,6 +122,19 @@ export default function DashboardPage() {
     }
   }
 
+  /**
+   * Vai a caixa do telemovel. Nunca rebenta a cadeia: sem internet, ou com o
+   * Worker em baixo, o dashboard tem de abrir e a fila local tem de aplicar
+   * na mesma. O backend volta a tentar no seu proprio tick.
+   */
+  async function syncPhone() {
+    try {
+      setPhoneMessage(phoneInboxMessage(await syncInbox()));
+    } catch (err) {
+      console.warn("phone inbox sync failed", err);
+    }
+  }
+
   // Aplicar a fila reescreve o ficheiro e reimporta, por isso a grelha tem de
   // ser reposta a zero -- e o mesmo motivo por que registar um gasto a invalida.
   async function applyPending() {
@@ -120,8 +143,10 @@ export default function DashboardPage() {
       const result = await flushPending();
       setPending(result.stillPending);
       setPendingFailures(result.failures);
+      setPendingRejected(result.rejected);
       if (result.applied > 0) {
         await queryClient.invalidateQueries({ queryKey: ["budget-grid"] });
+        await queryClient.invalidateQueries({ queryKey: ["budget-parcels"] });
       }
     } catch {
       // O aviso fica como esta e o botao volta a ficar clicavel. Uma falha aqui
@@ -129,6 +154,23 @@ export default function DashboardPage() {
     } finally {
       setFlushing(false);
     }
+  }
+
+  /**
+   * Tira uma rejeitada da fila. Se o pedido falhar, a linha fica e o botao
+   * volta a ficar clicavel -- nada se perdeu, porque a entrada continua no
+   * servidor. Se outro separador ja a tinha tirado, o backend responde
+   * cleared 0 sem erro e a linha sai na mesma, que e o que interessa.
+   */
+  async function discardRejected(id: string) {
+    try {
+      await discardPending(id);
+    } catch (err) {
+      console.error("discard pending failed", err);
+      return;
+    }
+    setPendingRejected((rows) => rows.filter((r) => r.id !== id));
+    setPending((n) => Math.max(0, n - 1));
   }
 
   async function runScan(force: boolean) {
@@ -154,6 +196,7 @@ export default function DashboardPage() {
 
       if (!result.fromCache && result.imported.length > 0) {
         await queryClient.invalidateQueries({ queryKey: ["budget-grid"] });
+        await queryClient.invalidateQueries({ queryKey: ["budget-parcels"] });
         await queryClient.invalidateQueries({ queryKey: ["budget-years"] });
       }
     } catch (err) {
@@ -212,17 +255,23 @@ export default function DashboardPage() {
     // nos ramos de erro e vazio.
     const bar = (
       <>
+        <PhoneInboxNotice message={phoneMessage} onDismiss={() => setPhoneMessage(null)} />
         <PendingNotice
           count={pending}
           busy={flushing}
           onApply={applyPending}
           failures={pendingFailures}
+          rejected={pendingRejected}
+          onDiscard={discardRejected}
         />
         <AddEntryBar
           year={year}
           rows={data?.rows ?? []}
           onWritten={() => {
             void queryClient.invalidateQueries({ queryKey: ["budget-grid", year] });
+            // A reimportacao que a escrita faz tambem refez as parcelas; sem isto o
+            // "What was bought" ficava a mostrar o mes de antes do lancamento.
+            void queryClient.invalidateQueries({ queryKey: ["budget-parcels", year] });
           }}
           onPending={setPending}
         />

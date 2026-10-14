@@ -7,6 +7,7 @@ import usersRouter from "./modules/user/user.routes";
 import tokenRouter from "./modules/token/token.routes";
 import budgetRouter from "./modules/budget/budget.routes";
 import t212Router from "./modules/t212/t212.routes";
+import inboxRouter from "./modules/inbox/inbox.routes";
 import { routeNotFound } from "./middlewares/routeNotFound";
 
 export const app = express();
@@ -31,6 +32,7 @@ app.use("/user", usersRouter);
 app.use("/token", tokenRouter);
 app.use("/budget", budgetRouter);
 app.use("/t212", t212Router);
+app.use("/inbox", inboxRouter);
 
 //Error handler(s)
 app.use(routeNotFound);

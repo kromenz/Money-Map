@@ -1,0 +1,3 @@
+# Copiar para .dev.vars (que nao vai para o git). Em producao:
+# npx wrangler secret put DESKTOP_TOKEN
+DESKTOP_TOKEN=dev-desktop-token

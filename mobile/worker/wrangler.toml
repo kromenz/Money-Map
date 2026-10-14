@@ -1,0 +1,10 @@
+name = "money-map-inbox"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+# Para o deploy: `npx wrangler d1 create money-map-inbox` e trocar o
+# database_id pelo que ele devolver. Em `wrangler dev --local` qualquer id serve.
+[[d1_databases]]
+binding = "DB"
+database_name = "money-map-inbox"
+database_id = "00000000-0000-0000-0000-000000000000"

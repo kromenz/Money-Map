@@ -113,3 +113,7 @@ docs/superpowers
 # O padrao .env acima nao as apanha, e um git add -A varria-as para o commit.
 .env.bak*
 *.env.bak*
+
+# Worker da caixa do telemovel: segredos locais e o estado do wrangler dev.
+.dev.vars
+.wrangler/

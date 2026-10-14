@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { applyExpenses } from "@/lib/xlsx-package";
 import { groupPendingByYear } from "@/lib/pending-plan";
+import { checkBatch } from "@/lib/pending-check";
 import {
   budgetFolder,
   clearPendingRetrying,
@@ -12,23 +13,28 @@ import {
   withFolderLock,
   writeYear,
 } from "@/server/budget-file";
-import type { FlushResponse } from "@/types/expense";
+import type { FlushResponse, PendingExpense } from "@/types/expense";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   const folder = budgetFolder();
-  const empty: FlushResponse = { applied: 0, stillPending: 0, failures: [] };
+  const empty: FlushResponse = { applied: 0, stillPending: 0, failures: [], rejected: [] };
   if (!folder) return NextResponse.json(empty);
 
   const cookie = request.headers.get("cookie") ?? "";
 
   return withFolderLock(async () => {
-    const batches = groupPendingByYear(await fetchPending(cookie));
+    const pending = await fetchPending(cookie);
+    const batches = groupPendingByYear(pending);
+    // O lote so traz ids e o que a folha precisa; o ecra precisa da entrada
+    // inteira para dizer qual foi rejeitada.
+    const byId = new Map<string, PendingExpense>(pending.map((p) => [p.id, p]));
 
     let applied = 0;
     let stillPending = 0;
     const failures: FlushResponse["failures"] = [];
+    const rejected: FlushResponse["rejected"] = [];
 
     for (const batch of batches) {
       // Um ano trancado nao impede os outros: cada ano e o seu proprio ficheiro.
@@ -68,9 +74,27 @@ export async function POST(request: Request) {
         continue;
       }
 
+      // Fora do try: o catch tem de saber quantas ainda estavam por aplicar.
+      // Se o checkBatch rebentar, sao todas -- ready continua a ser o lote.
+      let ready = batch;
       try {
         const file = await readYear(folder, batch.year);
-        const written = await applyExpenses(file, batch.expenses);
+
+        // Antes de escrever: uma entrada sem linha na folha ficava a prender
+        // o ano inteiro. Assim so ela fica, com a sua razao.
+        const checked = await checkBatch(file, batch);
+        ready = checked.ready;
+        for (const r of checked.rejected) {
+          const entry = byId.get(r.id);
+          if (entry) rejected.push({ ...entry, reason: r.reason });
+        }
+        stillPending += checked.rejected.length;
+
+        // Nada para escrever: reescrever e reimportar a folha seria trabalho
+        // (e um backup) sem mudar uma celula.
+        if (ready.ids.length === 0) continue;
+
+        const written = await applyExpenses(file, ready.expenses);
         const result = await writeYear(folder, batch.year, written, cookie);
 
         // "=== false" e nao "!result.ok": sem strictNullChecks (tsconfig
@@ -84,12 +108,12 @@ export async function POST(request: Request) {
             // estes ids da fila com retentativas (as mesmas do item B); se
             // mesmo assim falhar, ficam por limpar mas a razao ja avisa
             // claramente que nao se deve reaplicar.
-            const cleared = await clearPendingRetrying(cookie, batch.ids);
-            if (!cleared) stillPending += batch.ids.length;
+            const cleared = await clearPendingRetrying(cookie, ready.ids);
+            if (!cleared) stillPending += ready.ids.length;
             failures.push({ year: batch.year, reason: result.reason });
             continue;
           }
-          stillPending += batch.ids.length;
+          stillPending += ready.ids.length;
           failures.push({ year: batch.year, reason: result.reason });
           continue;
         }
@@ -98,7 +122,7 @@ export async function POST(request: Request) {
         // import revertesse. Com retentativas (item B): uma quebra so
         // transitoria no pedido de limpeza nao deixa a fila suja; nao fecha
         // a janela por completo -- ver o comentario em clearPendingRetrying.
-        const cleared = await clearPendingRetrying(cookie, batch.ids);
+        const cleared = await clearPendingRetrying(cookie, ready.ids);
         if (!cleared) {
           // A folha ja tem os gastos escritos -- o import aceitou. Mas os
           // ids continuam na fila, por isso NAO contam como aplicados: se
@@ -106,7 +130,7 @@ export async function POST(request: Request) {
           // escrever os mesmos gastos, duplicando-os em silencio na folha do
           // utilizador. A razao fica bem distinta das outras para nao ser
           // confundida com uma falha de escrita.
-          stillPending += batch.ids.length;
+          stillPending += ready.ids.length;
           failures.push({
             year: batch.year,
             reason: `the sheet for ${batch.year} was updated but the pending queue could not be cleared afterwards — do not reapply, it would duplicate these expenses`,
@@ -114,9 +138,9 @@ export async function POST(request: Request) {
           continue;
         }
 
-        applied += batch.ids.length;
+        applied += ready.ids.length;
       } catch {
-        stillPending += batch.ids.length;
+        stillPending += ready.ids.length;
         failures.push({
           year: batch.year,
           reason: `the sheet for ${batch.year} could not be updated`,
@@ -124,6 +148,6 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({ applied, stillPending, failures } satisfies FlushResponse);
+    return NextResponse.json({ applied, stillPending, failures, rejected } satisfies FlushResponse);
   });
 }

@@ -151,7 +151,7 @@ export function startT212Scheduler(): { stop: () => void } {
   };
 
   void tick();
-  const timer = setInterval(tick, cfg.syncIntervalHours * 60 * 60 * 1000);
+  const timer = setInterval(tick, cfg.syncIntervalMinutes * 60 * 1000);
   // Sem unref, o intervalo mantinha o processo vivo e o lancador nunca fechava.
   timer.unref?.();
 
