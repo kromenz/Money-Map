@@ -158,9 +158,9 @@ and the dashboard checks it again every time it opens.
 ## Tests
 
 ```bash
-cd backend       && npm test    # 370
+cd backend       && npm test    # 374
 cd frontend      && npm test    # 261
-cd mobile/worker && npm test    # 19
+cd mobile/worker && npm test    # 20
 ```
 
 Type checking is the other gate — `npx tsc --noEmit` in any of the three. There is
