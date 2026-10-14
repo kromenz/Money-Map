@@ -5,7 +5,11 @@
 //   node scripts/fake-phone.mjs status  "<url de emparelhamento>" <id,id,...>
 //   node scripts/fake-phone.mjs catalog "<url de emparelhamento>"
 //
-// A URL de emparelhamento e a que o POST /inbox/pairing devolve.
+// A URL de emparelhamento e a que o POST /inbox/pairing devolve. A entrada
+// tambem pode vir de um ficheiro, com '@caminho.json': no PowerShell 5.1 um
+// JSON com espacos nao sobrevive como argumento de um exe.
+
+import { readFileSync } from "node:fs";
 
 const enc = new TextEncoder();
 const b64 = (u) => Buffer.from(u).toString("base64");
@@ -54,7 +58,8 @@ if (cmd === "vector") {
 } else if (cmd === "send") {
   const p = parsePairing(pairing);
   const id = maybeId ?? crypto.randomUUID();
-  const entry = { id, createdAt: new Date().toISOString(), ...JSON.parse(arg) };
+  const raw = arg.startsWith("@") ? readFileSync(arg.slice(1), "utf8") : arg;
+  const entry = { id, createdAt: new Date().toISOString(), ...JSON.parse(raw) };
   const res = await fetch(`${p.base}/api/entries`, {
     method: "POST",
     headers: { authorization: `Bearer ${p.token}`, "content-type": "application/json" },

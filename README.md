@@ -124,14 +124,46 @@ T212_BRIDGE_FROM=2026-09-01
 written into the budget. The effective cutoff is the later of it and the last
 month the spreadsheet already accounts for, so a month is never counted twice.
 
+## Phone (optional)
+
+Expenses can be recorded on the phone and picked up by the app the next time it
+runs. They wait, encrypted, in a small Cloudflare Worker that cannot read them:
+the key lives only in `backend/.env` and on the paired phone.
+
+**1. Deploy the inbox** (once, from `mobile/worker`):
+
+```bash
+npm install
+npx wrangler d1 create money-map-inbox      # put the id it prints in wrangler.toml
+npx wrangler d1 execute money-map-inbox --remote --file=schema.sql
+npx wrangler secret put DESKTOP_TOKEN       # any long random string
+npx wrangler deploy
+```
+
+**2. Point the backend at it**, in `backend/.env`:
+
+```env
+INBOX_URL=https://money-map-inbox.<your-subdomain>.workers.dev
+INBOX_DESKTOP_TOKEN=...   # the same string as DESKTOP_TOKEN
+INBOX_KEY=...             # node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+Leave any of them unset and the app works exactly as before. Changing `INBOX_KEY`
+means pairing the phone again; entries made with the old key stay in the inbox
+and are reported on the dashboard, never silently dropped.
+
+The backend checks the inbox on startup and every five minutes while it runs,
+and the dashboard checks it again every time it opens.
+
 ## Tests
 
 ```bash
-cd backend  && npm test    # 298
-cd frontend && npm test    # 214
+cd backend       && npm test    # 370
+cd frontend      && npm test    # 261
+cd mobile/worker && npm test    # 19
 ```
 
-Type checking is the other gate — `npx tsc --noEmit` in either folder. There is
+Type checking is the other gate — `npx tsc --noEmit` in any of the three. There is
 no linter, on purpose.
 
 ## Contributing
