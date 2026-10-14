@@ -26,8 +26,15 @@ export type AddExpenseResponse =
 
 export type FlushResponse = {
   applied: number;
+  /** Inclui as rejeitadas: continuam na fila ate serem descartadas. */
   stillPending: number;
   failures: { year: number; reason: string }[];
+  /**
+   * Entradas que a folha do seu ano nao tem onde por -- tipicamente uma
+   * categoria renomeada ou apagada depois de o gasto ter entrado na fila.
+   * Vem com os dados todos para o ecra as mostrar sem outro pedido.
+   */
+  rejected: RejectedPending[];
 };
 
 export type PendingExpense = {
@@ -42,3 +49,5 @@ export type PendingExpense = {
   /** A etiqueta escrita quando o gasto foi registado, se levou alguma. */
   note: string | null;
 };
+
+export type RejectedPending = PendingExpense & { reason: string };
