@@ -39,6 +39,15 @@ describe("loadInboxConfig", () => {
     ).toBe(false);
   });
 
+  it("http so para a maquina local", () => {
+    // O token do desktop vai no cabecalho: por http ate um Worker publicado
+    // viajava em claro.
+    expect(loadInboxConfig({ ...full, INBOX_URL: "http://money-map-inbox.example.workers.dev" }).configured).toBe(false);
+    expect(loadInboxConfig({ ...full, INBOX_URL: "http://localhost:8787" }).configured).toBe(true);
+    expect(loadInboxConfig({ ...full, INBOX_URL: "http://127.0.0.1:8787" }).configured).toBe(true);
+    expect(loadInboxConfig({ ...full, INBOX_URL: "http://localhost.evil.com" }).configured).toBe(false);
+  });
+
   it("sem nada, nao configurado e sem rebentar", () => {
     expect(loadInboxConfig({}).configured).toBe(false);
   });

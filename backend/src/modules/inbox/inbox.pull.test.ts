@@ -130,15 +130,26 @@ describe("pullInbox", () => {
     expect(report.failures.map((f) => f.id)).toEqual([ID_A]);
   });
 
-  it("uma falha a gravar na base sobe e nao apaga da cloud", async () => {
+  it("uma entrada que a base recusa nao prende as seguintes", async () => {
+    // A primeira volta sempre primeiro (a caixa e lida por ordem de chegada).
+    // Se a falha dela parasse o pull, nada do que viesse depois chegava nunca.
     const w = await world();
-    await w.put(ID_A, entry(ID_A));
-    w.deps.receive = async () => {
-      throw new Error("base em baixo");
+    await w.put(ID_A, entry(ID_A, { amount: "1.00" }));
+    await w.put(ID_B, entry(ID_B, { amount: "2.00" }));
+    const receive = w.deps.receive;
+    w.deps.receive = async (id, input) => {
+      if (id === ID_A) throw new Error("numeric field overflow");
+      return receive(id, input);
     };
 
-    await expect(pullInbox(w.deps)).rejects.toThrow("base em baixo");
+    const report = await pullInbox(w.deps);
+
+    expect(report.received).toBe(1);
+    expect(report.failures).toEqual([{ id: ID_A, reason: expect.stringContaining("could not be saved") }]);
+    expect(w.queue.map((q) => q.sourceId)).toEqual([ID_B]);
+    // Nao foi gravada, por isso nao se apaga: fica para a proxima.
     expect(w.cloud.has(ID_A)).toBe(true);
+    expect(w.cloud.has(ID_B)).toBe(false);
   });
 
   it("mantem a ordem da caixa", async () => {

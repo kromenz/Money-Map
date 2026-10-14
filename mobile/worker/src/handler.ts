@@ -4,7 +4,9 @@ import type { Store } from "./store";
 type Role = "desktop" | "phone";
 type Env = { DESKTOP_TOKEN: string };
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// So minusculas, e sem as baixar: o id e o AAD da cifra, e um blob selado
+// com o id em maiusculas e guardado em minusculas nunca mais decifrava.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const SHA256_HEX = /^[0-9a-f]{64}$/;
 /** Uma entrada cifrada tem uns 300 bytes; 8 KB e folga, nao um convite. */
 const MAX_ENTRY = 8192;
@@ -88,7 +90,7 @@ export async function handle(
       return json(400, { error: "expected {id: uuid, blob: string}" });
     }
     if (b.blob.length > MAX_ENTRY) return json(413, { error: "entry too large" });
-    await store.addEntry(b.id.toLowerCase(), b.blob, now().toISOString());
+    await store.addEntry(b.id, b.blob, now().toISOString());
     return empty(201);
   }
 

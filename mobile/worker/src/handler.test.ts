@@ -112,6 +112,14 @@ describe("entradas", () => {
     expect((await req("POST", "/api/entries", PHONE, "nao e objecto")).status).toBe(400);
   });
 
+  it("recusa um id com maiusculas em vez de o baixar", async () => {
+    // O id e o AAD da cifra. Guardado em minusculas, um blob selado com o id
+    // em maiusculas nunca mais decifrava, e parecia "outra chave".
+    expect(
+      (await req("POST", "/api/entries", PHONE, { id: ID.toUpperCase(), blob: "b" })).status
+    ).toBe(400);
+  });
+
   it("recusa blob grande demais", async () => {
     expect(
       (await req("POST", "/api/entries", PHONE, { id: ID, blob: "x".repeat(8193) })).status

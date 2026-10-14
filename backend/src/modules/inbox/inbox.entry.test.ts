@@ -48,6 +48,26 @@ describe("inboxEntrySchema", () => {
     expect(inboxEntrySchema.safeParse(entry({ note: "x".repeat(61) })).success).toBe(false);
   });
 
+  it("o valor cabe no Decimal(12,2) da base", () => {
+    // Um valor que o Zod aceitasse e o Postgres recusasse voltava sempre
+    // primeiro na caixa e travava tudo o que viesse depois dele.
+    expect(inboxEntrySchema.safeParse(entry({ amount: "12345678901" })).success).toBe(false);
+    expect(inboxEntrySchema.safeParse(entry({ amount: "9999999999.99" })).success).toBe(true);
+  });
+
+  it("recusa caracteres de controlo no texto", () => {
+    // O Postgres recusa \u0000 em TEXT, e o XML da folha recusa os outros.
+    for (const field of ["name", "group", "note"]) {
+      expect(inboxEntrySchema.safeParse(entry({ [field]: "Su\u0000per" })).success, field).toBe(false);
+      expect(inboxEntrySchema.safeParse(entry({ [field]: "Su\u0007per" })).success, field).toBe(false);
+    }
+  });
+
+  it("recusa nomes de categoria absurdamente longos", () => {
+    expect(inboxEntrySchema.safeParse(entry({ name: "x".repeat(201) })).success).toBe(false);
+    expect(inboxEntrySchema.safeParse(entry({ group: "x".repeat(201) })).success).toBe(false);
+  });
+
   it("recusa um id que nao e UUID", () => {
     expect(inboxEntrySchema.safeParse(entry({ id: "1" })).success).toBe(false);
   });

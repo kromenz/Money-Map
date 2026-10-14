@@ -21,17 +21,25 @@ function isCalendarDate(value: string): boolean {
  * flush ficava presa na fila; e melhor recusa-la ja, enquanto ainda esta na
  * cloud.
  */
+// Sem caracteres de controlo: o Postgres recusa \u0000 em TEXT e o XML da
+// folha recusa os outros. Uma entrada assim falhava sempre mais a frente.
+const NO_CONTROL = /^[^\u0000-\u001f\u007f]*$/;
+const text = (max: number) =>
+  z.string().max(max).regex(NO_CONTROL, { message: "caracteres de controlo" });
+
 export const inboxEntrySchema = z.object({
   id: z.uuid(),
   date: z.string().refine(isCalendarDate, { message: "data invalida" }),
   section: z.enum(["income", "savings", "expenses"]),
-  group: z.string(),
-  name: z.string().min(1),
+  group: text(200),
+  name: text(200).min(1),
+  // No maximo 10 digitos inteiros: e o que cabe no Decimal(12,2) da
+  // PendingExpense. Mais do que isso passava aqui e rebentava na base.
   amount: z
     .string()
-    .regex(/^\d+(\.\d{1,2})?$/, { message: "valor com formato invalido" })
+    .regex(/^\d{1,10}(\.\d{1,2})?$/, { message: "valor com formato invalido" })
     .refine((v) => Number(v) > 0, { message: "valor tem de ser positivo" }),
-  note: z.string().trim().max(60).optional(),
+  note: text(60).trim().optional(),
   createdAt: z.string(),
 });
 

@@ -25,8 +25,11 @@ export type PullDeps = {
  * (a chave trocada no .env, um schema mais apertado) perdia um gasto que o
  * utilizador registou e julga guardado.
  *
- * Uma falha da base sobe: parar a meio e seguro, porque nada do que falta foi
- * apagado.
+ * Uma falha a gravar uma entrada fica nessa entrada. Ela continua na cloud e
+ * volta a ser tentada no pull seguinte. Parar o pull inteiro tambem era
+ * seguro, mas a caixa le-se por ordem de chegada: uma entrada que a base
+ * recusasse sempre voltava sempre primeiro, e nada do que viesse depois dela
+ * chegava nunca.
  */
 export async function pullInbox(deps: PullDeps): Promise<PullReport> {
   const items = await deps.list();
@@ -51,9 +54,15 @@ export async function pullInbox(deps: PullDeps): Promise<PullReport> {
       continue;
     }
 
-    if (!(await deps.alreadyReceived(item.id))) {
-      await deps.receive(item.id, toPendingInput(parsed.data));
-      received += 1;
+    try {
+      if (!(await deps.alreadyReceived(item.id))) {
+        await deps.receive(item.id, toPendingInput(parsed.data));
+        received += 1;
+      }
+    } catch (err) {
+      console.warn(`[inbox] a entrada ${item.id} nao foi gravada`, err);
+      failures.push({ id: item.id, reason: "the entry could not be saved — it will be retried" });
+      continue;
     }
 
     try {
