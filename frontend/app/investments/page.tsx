@@ -27,6 +27,12 @@ import { t212StageLabel } from "../../src/lib/t212-labels";
 // tem problema nenhum.
 type SyncNotice = { tone: "error" | "info"; message: string; detail?: string };
 
+/**
+ * Cadencia com que a pagina re-le o espelho enquanto esta aberta. Um minuto
+ * acompanha o intervalo de sincronizacao mais curto que faz sentido no
+ * servidor; mais depressa era pedir ao espelho o que ele ainda nao tem.
+ */
+const LIVE_REFRESH_MS = 60_000;
 export default function InvestmentsPage() {
   const { user, loading } = useRequireAuth("/");
   const queryClient = useQueryClient();
@@ -36,6 +42,12 @@ export default function InvestmentsPage() {
     queryKey: ["t212-overview"],
     queryFn: fetchOverview,
     enabled: Boolean(user),
+    // O servidor sincroniza sozinho no intervalo configurado; sem isto a
+    // pagina so via o resultado num F5. So com o separador visivel -- o
+    // React Query nao dispara em segundo plano por omissao -- e so quando ha
+    // chave, porque sem ela nao ha nada novo para ir buscar.
+    refetchInterval: (query) =>
+      query.state.data?.configured ? LIVE_REFRESH_MS : false,
   });
 
   // So arranca depois de o overview confirmar "configured": sem chave a rota
@@ -45,6 +57,8 @@ export default function InvestmentsPage() {
     queryKey: ["t212-chart"],
     queryFn: fetchChart,
     enabled: Boolean(user) && Boolean(data?.configured),
+    // O ponto de hoje do grafico e reescrito a cada sincronizacao.
+    refetchInterval: LIVE_REFRESH_MS,
   });
 
   const sync = useMutation({

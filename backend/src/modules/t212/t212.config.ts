@@ -3,7 +3,8 @@ export type T212Config = {
   baseUrl: string;
   apiKey: string;
   apiSecret: string;
-  syncIntervalHours: number;
+  /** Entre sincronizacoes automaticas. Por omissao seis horas. */
+  syncIntervalMinutes: number;
   bridgeFrom: string | null;
   userEmail: string | null;
 };
@@ -21,7 +22,6 @@ export function loadT212Config(
   env: NodeJS.ProcessEnv = process.env
 ): T212Config {
   const apiKey = env.T212_API_KEY ?? "";
-  const hours = Number(env.T212_SYNC_INTERVAL_HOURS);
   const bridgeFrom = env.T212_BRIDGE_FROM ?? "";
 
   return {
@@ -29,8 +29,23 @@ export function loadT212Config(
     baseUrl: env.T212_ENV === "demo" ? DEMO : LIVE,
     apiKey,
     apiSecret: env.T212_API_SECRET ?? "",
-    syncIntervalHours: Number.isFinite(hours) && hours > 0 ? hours : 6,
+    syncIntervalMinutes: syncIntervalMinutes(env),
     bridgeFrom: ISO_DATE.test(bridgeFrom) ? bridgeFrom : null,
     userEmail: env.T212_USER_EMAIL ? env.T212_USER_EMAIL : null,
   };
+}
+
+/**
+ * Minutos ganham a horas. A variavel em horas e a original e os .env que ja
+ * existem usam-na; a de minutos nasceu quando um minuto em horas (0.0167) se
+ * tornou o valor que se queria escrever. Um valor que nao e um numero positivo
+ * conta como ausente, e nao como zero -- zero era um setInterval a disparar
+ * sem parar contra o limite da conta.
+ */
+function syncIntervalMinutes(env: NodeJS.ProcessEnv): number {
+  const minutes = Number(env.T212_SYNC_INTERVAL_MINUTES);
+  if (Number.isFinite(minutes) && minutes > 0) return minutes;
+  const hours = Number(env.T212_SYNC_INTERVAL_HOURS);
+  if (Number.isFinite(hours) && hours > 0) return hours * 60;
+  return 6 * 60;
 }

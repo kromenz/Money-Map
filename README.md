@@ -116,7 +116,7 @@ configured; everything else works.
 T212_API_KEY=...
 T212_ENV=live            # or demo
 T212_USER_EMAIL=you@example.com
-T212_SYNC_INTERVAL_HOURS=6
+T212_SYNC_INTERVAL_MINUTES=360   # or T212_SYNC_INTERVAL_HOURS; minutes win
 T212_BRIDGE_FROM=2026-09-01
 ```
 
