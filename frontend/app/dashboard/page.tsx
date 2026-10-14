@@ -22,13 +22,14 @@ import { PendingNotice } from "../../src/components/dashboard/PendingNotice";
 import { fetchGrid } from "../../src/services/budget.service";
 import { scanFolder } from "../../src/services/folder-scan.service";
 import { flushPending } from "../../src/services/expense.service";
+import { discardPending } from "../../src/services/pending.service";
 import { flushBridge } from "../../src/services/bridge.service";
 import { yearMetrics, monthDetail } from "../../src/lib/budget-metrics";
 import { categoryDeltas } from "../../src/lib/category-deltas";
 import { MONTH_LABELS } from "../../src/lib/format";
 import type { ImportResult } from "../../src/types/budget";
 import type { FolderScanFailure } from "../../src/types/folder-scan";
-import type { FlushResponse } from "../../src/types/expense";
+import type { FlushResponse, RejectedPending } from "../../src/types/expense";
 
 export default function DashboardPage() {
   const { user, loading } = useRequireAuth("/");
@@ -47,6 +48,7 @@ export default function DashboardPage() {
   const [scanning, setScanning] = useState(false);
   const [pending, setPending] = useState(0);
   const [pendingFailures, setPendingFailures] = useState<FlushResponse["failures"]>([]);
+  const [pendingRejected, setPendingRejected] = useState<RejectedPending[]>([]);
   const [flushing, setFlushing] = useState(false);
 
   // isPending cobre pending+fetching, pending+paused (offline) e
@@ -120,6 +122,7 @@ export default function DashboardPage() {
       const result = await flushPending();
       setPending(result.stillPending);
       setPendingFailures(result.failures);
+      setPendingRejected(result.rejected);
       if (result.applied > 0) {
         await queryClient.invalidateQueries({ queryKey: ["budget-grid"] });
       }
@@ -129,6 +132,23 @@ export default function DashboardPage() {
     } finally {
       setFlushing(false);
     }
+  }
+
+  /**
+   * Tira uma rejeitada da fila. Se o pedido falhar, a linha fica e o botao
+   * volta a ficar clicavel -- nada se perdeu, porque a entrada continua no
+   * servidor. Se outro separador ja a tinha tirado, o backend responde
+   * cleared 0 sem erro e a linha sai na mesma, que e o que interessa.
+   */
+  async function discardRejected(id: string) {
+    try {
+      await discardPending(id);
+    } catch (err) {
+      console.error("discard pending failed", err);
+      return;
+    }
+    setPendingRejected((rows) => rows.filter((r) => r.id !== id));
+    setPending((n) => Math.max(0, n - 1));
   }
 
   async function runScan(force: boolean) {
@@ -217,6 +237,8 @@ export default function DashboardPage() {
           busy={flushing}
           onApply={applyPending}
           failures={pendingFailures}
+          rejected={pendingRejected}
+          onDiscard={discardRejected}
         />
         <AddEntryBar
           year={year}
