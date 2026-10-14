@@ -13,6 +13,7 @@ import { WorkbookFormatError } from "./budget.parser";
 import { addPending, listPending, clearPending } from "./budget.pending";
 import { getMonthParcels } from "./budget.parcels.query";
 import { getNoteSuggestions } from "./budget.notes.query";
+import { pushCatalogQuietly } from "../inbox/inbox.service";
 
 export const importWorkbook: RequestHandler = async (req, res, next) => {
   try {
@@ -40,6 +41,11 @@ export const importWorkbook: RequestHandler = async (req, res, next) => {
       file.buffer,
       parsedQuery.data.year
     );
+
+    // Uma importacao aceite pode ter trazido ou arquivado categorias. Sem
+    // await: a resposta nao espera pela cloud, e uma falha la so se resolve
+    // no tick seguinte.
+    if (result.allMatch) void pushCatalogQuietly(userId);
 
     // 422 quando os totais nao batem: nada foi gravado -- a transacao reverteu
     // -- e o relatorio diz ao cliente que escopos e que nao reproduzem a folha.
