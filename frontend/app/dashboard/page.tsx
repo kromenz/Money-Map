@@ -19,6 +19,9 @@ import { DashboardSkeleton } from "../../src/components/dashboard/DashboardSkele
 import { FolderScanNotice } from "../../src/components/dashboard/FolderScanNotice";
 import { AddEntryBar } from "../../src/components/dashboard/AddEntryBar";
 import { PendingNotice } from "../../src/components/dashboard/PendingNotice";
+import { PhoneInboxNotice } from "../../src/components/dashboard/PhoneInboxNotice";
+import { syncInbox } from "../../src/services/inbox.service";
+import { phoneInboxMessage } from "../../src/lib/phone-inbox";
 import { fetchGrid } from "../../src/services/budget.service";
 import { scanFolder } from "../../src/services/folder-scan.service";
 import { flushPending } from "../../src/services/expense.service";
@@ -50,6 +53,7 @@ export default function DashboardPage() {
   const [pendingFailures, setPendingFailures] = useState<FlushResponse["failures"]>([]);
   const [pendingRejected, setPendingRejected] = useState<RejectedPending[]>([]);
   const [flushing, setFlushing] = useState(false);
+  const [phoneMessage, setPhoneMessage] = useState<ReturnType<typeof phoneInboxMessage>>(null);
 
   // isPending cobre pending+fetching, pending+paused (offline) e
   // pending+disabled -- qualquer estado sem dados ainda, nao so "a carregar".
@@ -81,6 +85,9 @@ export default function DashboardPage() {
     if (!data || scanned.current) return;
     scanned.current = true;
     void runScan(false)
+      // Entre o varrimento e a fila: o que chega do telemovel entra na fila, e
+      // o applyPending a seguir escreve-o na mesma volta.
+      .then(() => syncPhone())
       .then(() => applyPending())
       // A ponte por ultimo, e a seguir ao varrimento: e o varrimento que
       // importa a folha e faz o corte avancar, e correr a ponte antes disso
@@ -112,6 +119,19 @@ export default function DashboardPage() {
       }
     } catch (err) {
       console.error("bridge flush failed", err);
+    }
+  }
+
+  /**
+   * Vai a caixa do telemovel. Nunca rebenta a cadeia: sem internet, ou com o
+   * Worker em baixo, o dashboard tem de abrir e a fila local tem de aplicar
+   * na mesma. O backend volta a tentar no seu proprio tick.
+   */
+  async function syncPhone() {
+    try {
+      setPhoneMessage(phoneInboxMessage(await syncInbox()));
+    } catch (err) {
+      console.warn("phone inbox sync failed", err);
     }
   }
 
@@ -235,6 +255,7 @@ export default function DashboardPage() {
     // nos ramos de erro e vazio.
     const bar = (
       <>
+        <PhoneInboxNotice message={phoneMessage} onDismiss={() => setPhoneMessage(null)} />
         <PendingNotice
           count={pending}
           busy={flushing}
