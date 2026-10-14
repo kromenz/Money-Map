@@ -12,6 +12,7 @@ import { buildGrid } from "./budget.grid";
 import { WorkbookFormatError } from "./budget.parser";
 import { addPending, listPending, clearPending } from "./budget.pending";
 import { getMonthParcels } from "./budget.parcels.query";
+import { getNoteSuggestions } from "./budget.notes.query";
 
 export const importWorkbook: RequestHandler = async (req, res, next) => {
   try {
@@ -181,6 +182,19 @@ export const getParcels: RequestHandler = async (req, res, next) => {
         parsed.data.month
       )
     );
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * As etiquetas que o utilizador ja escreveu, para a barra de lancamento as
+ * sugerir. Sem parametros: a lista e curta e vem toda de uma vez, para escrever
+ * uma letra no campo nao custar um pedido.
+ */
+export const getNotes: RequestHandler = async (req, res, next) => {
+  try {
+    res.json({ notes: await getNoteSuggestions((req as any).userId) });
   } catch (err) {
     next(err);
   }

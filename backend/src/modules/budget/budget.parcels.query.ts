@@ -21,6 +21,10 @@ export type CategoryParcels = {
 /**
  * O que foi comprado num mes, por categoria.
  *
+ * So a seccao `expenses`. As celulas de income e de savings tambem passaram a
+ * ter parcelas quando a barra de lancamento as aceitou, mas um salario nao e
+ * uma compra e aparecia na lista a dizer que era.
+ *
  * Devolve tudo na convencao da folha, tal como a grelha: quem le nunca tem de
  * saber que `savings` e `expenses` estao gravados com o sinal trocado.
  *
@@ -34,7 +38,7 @@ export async function getMonthParcels(
   month: number
 ): Promise<{ year: number; month: number; categories: CategoryParcels[] }> {
   const rows = await prisma.sheetParcel.findMany({
-    where: { userId, year, month },
+    where: { userId, year, month, category: { section: "expenses" } },
     select: {
       seq: true,
       amount: true,

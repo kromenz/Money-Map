@@ -10,6 +10,7 @@ import {
   getPending,
   clearPendingHandler,
   getParcels,
+  getNotes,
 } from "./budget.controller";
 
 const upload = multer({
@@ -37,6 +38,7 @@ budgetRouter.post(
 budgetRouter.get("/grid", authMiddleware, getGrid);
 budgetRouter.get("/years", authMiddleware, getYears);
 budgetRouter.get("/parcels", authMiddleware, getParcels);
+budgetRouter.get("/notes", authMiddleware, getNotes);
 
 budgetRouter.post("/pending", authMiddleware, queuePending);
 budgetRouter.get("/pending", authMiddleware, getPending);

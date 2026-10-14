@@ -100,6 +100,7 @@ export default function DashboardPage() {
       const result = await flushBridge();
       if (result.written > 0) {
         await queryClient.invalidateQueries({ queryKey: ["budget-grid"] });
+        await queryClient.invalidateQueries({ queryKey: ["budget-parcels"] });
       }
       // A folha ficou escrita mas o servidor nao soube: a proxima corrida
       // escreveria os mesmos valores outra vez. E o unico desfecho aqui que o
@@ -122,6 +123,7 @@ export default function DashboardPage() {
       setPendingFailures(result.failures);
       if (result.applied > 0) {
         await queryClient.invalidateQueries({ queryKey: ["budget-grid"] });
+        await queryClient.invalidateQueries({ queryKey: ["budget-parcels"] });
       }
     } catch {
       // O aviso fica como esta e o botao volta a ficar clicavel. Uma falha aqui
@@ -154,6 +156,7 @@ export default function DashboardPage() {
 
       if (!result.fromCache && result.imported.length > 0) {
         await queryClient.invalidateQueries({ queryKey: ["budget-grid"] });
+        await queryClient.invalidateQueries({ queryKey: ["budget-parcels"] });
         await queryClient.invalidateQueries({ queryKey: ["budget-years"] });
       }
     } catch (err) {
@@ -223,6 +226,9 @@ export default function DashboardPage() {
           rows={data?.rows ?? []}
           onWritten={() => {
             void queryClient.invalidateQueries({ queryKey: ["budget-grid", year] });
+            // A reimportacao que a escrita faz tambem refez as parcelas; sem isto o
+            // "What was bought" ficava a mostrar o mes de antes do lancamento.
+            void queryClient.invalidateQueries({ queryKey: ["budget-parcels", year] });
           }}
           onPending={setPending}
         />

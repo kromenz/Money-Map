@@ -81,6 +81,7 @@ export function ImportWorkbook({
       setShowDetail(false);
       // data.year e o ano onde o servidor escreveu, nao o que estava a ser visto.
       queryClient.invalidateQueries({ queryKey: ["budget-grid", data.year] });
+      queryClient.invalidateQueries({ queryKey: ["budget-parcels", data.year] });
       // A lista de anos muda quando um ano passa a ter (ou deixa de ter) dados.
       queryClient.invalidateQueries({ queryKey: ["budget-years"] });
 
